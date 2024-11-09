@@ -9,13 +9,16 @@ from scraping.scraper import ThreadsScraper
 def main():
     base_url = "https://www.threads.net"
     scraper = ThreadsScraper(base_url)
-    username = "everydaywoksoflife"
-    profile_data = scraper.fetch_profile(username)
+    usernames = ["everydaywoksoflife","ktla5news"] #Example usernames
     
-    if profile_data:
-        print("Profile Data:", profile_data)
-    else:
-        print("No data retrieved.")
+    for username in usernames:
+        profile_data = scraper.fetch_profile(username)
 
+        if profile_data:
+            print(f"Profile Data for {username}:",profile_data)
+        else:
+            print(f"No data retrieved for {username}.")
+            
+    scraper.driver.quit()
 if __name__ == "__main__":
     main()

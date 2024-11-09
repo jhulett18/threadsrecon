@@ -15,16 +15,12 @@ class ThreadsScraper:
         self.chrome_options.add_argument('--disable-gpu')
         self.chrome_options.add_argument('--no-sandbox')
         self.chrome_options.add_argument('--disable-dev-shm-usage')
-
+        self.driver = webdriver.Chrome(service=Service('chromedriver'))
 
     def fetch_profile(self, username):
-        url = f"{self.base_url}/{username}"
-        service = Service('chromedriver')
-        driver = webdriver.Chrome(service=service)
-        driver.get(url)
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
-        driver.quit()
-    
+        url = f"{self.base_url}/@{username}"
+        self.driver.get(url)
+        soup = BeautifulSoup(self.driver.page_source, 'html.parser')    
         profile_data = {'username': username}
 
 
@@ -139,5 +135,31 @@ class ThreadsScraper:
                 if last_post_date is None or post_date_obj > last_post_date:
                     last_post_date = post_date_obj
                     profile_data['last_post_date']=last_post_date
+
+
+    
+        replies_url=f"{url}/replies"
+        self.driver.get(replies_url)
+        soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+
+        replies = soup.find_all('div', class_='x9f619 x1n2onr6 x1ja2u2z')
+        num_replies =len(replies)-1
+        if num_replies == 0:
+            profile_data['replies']="No replies found"
+        else:
+            profile_data['replies']=num_replies
+
+
+        reposts_url=f"{url}/reposts"
+        self.driver.get(reposts_url)
+        soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+
+        reposts = soup.find_all('div', class_='x78zum5 xdt5ytf')
+        num_reposts =len(reposts)
+        if num_reposts == 0:
+            profile_data['reposts']="No reposts found"
+        else:
+            profile_data['reposts']=num_reposts
+
 
         return profile_data
