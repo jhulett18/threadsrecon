@@ -1,4 +1,5 @@
 import json
+import yaml
 from datetime import datetime
 from scraping.scraper import ThreadsScraper
 #from processing.data_processing import process_data
@@ -14,17 +15,20 @@ def datetime_converter(obj):
 
     
 def main():
-    base_url = "https://www.threads.net"
-    scraper = ThreadsScraper(base_url)
+    with open("config.yaml", "r") as file:
+        config = yaml.safe_load(file)
 
-    instagram_username = "jackhughes947"
-    instagram_password = "A#asedfkujghn"
+    base_url = config["ScraperSettings"]["base_url"]
+    usernames = config["ScraperSettings"]["usernames"]
+    instagram_username = config["Credentials"]["instagram_username"]
+    instagram_password = config["Credentials"]["instagram_password"]
+    
+    scraper = ThreadsScraper(base_url)
 
     if not scraper.login(instagram_username, instagram_password):
         print("Failed to login. Exiting...")
         scraper.driver.quit()
         return
-    usernames = ["everydaywoksoflife","Kanyewestlover911"] #Example usernames
     all_profiles_data = {}
 
     try:

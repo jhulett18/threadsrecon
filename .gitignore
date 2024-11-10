@@ -6,3 +6,5 @@ scraping/__pycache__/
 visualization/__pycache__/
 profiles_data.json
 chromedriver
+settings.ini
+settings.yaml
