@@ -131,10 +131,10 @@ class ThreadsScraper:
                 # Update first and last post dates
                 if first_post_date is None or post_date_obj < first_post_date:
                     first_post_date = post_date_obj
-                    profile_data['first_post_date']=first_post_date
+                    profile_data['first_post_date(YYYY/DD/MM)']=first_post_date
                 if last_post_date is None or post_date_obj > last_post_date:
                     last_post_date = post_date_obj
-                    profile_data['last_post_date']=last_post_date
+                    profile_data['last_post_date(YYYY/DD/MM)']=last_post_date
 
 
     
