@@ -15,7 +15,7 @@ def datetime_converter(obj):
 
     
 def main():
-    with open("config.yaml", "r") as file:
+    with open("settings.yaml", "r") as file:
         config = yaml.safe_load(file)
 
     base_url = config["ScraperSettings"]["base_url"]

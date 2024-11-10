@@ -35,3 +35,10 @@ ScraperSettings:
 ```
 - Change Instagram credentials to log in to your desired account.
 - Change/add/remove target usernames to scrape.
+
+## Running
+- Simply run main.py in your IDE of choice
+- In Linux:
+```bash
+python3 main.py
+```
