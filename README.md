@@ -7,10 +7,10 @@ OSINT Tool for threads.net
 ```bash
 chrome://settings/help
 ```
-- Install [chromedriver](https://sites.google.com/chromium.org/driver/downloads) for your chrome version and OS.
 
 ## Installation
-Install the required libraries for python:
+- Install [chromedriver](https://sites.google.com/chromium.org/driver/downloads) for your chrome version and OS.
+- Install the required libraries for python:
 ```bash
 pip install pyyaml
 ```
@@ -20,8 +20,8 @@ pip install selenium
 ```bash
 pip install beautifulsoup4
 ```
-Create settings.yaml file.
-Add the text below to the .yaml file:
+- Create settings.yaml file.
+- Add the text below to the .yaml file:
 ```bash
 Credentials:
   instagram_username: exampleusername
@@ -33,5 +33,5 @@ ScraperSettings:
     - exampleusername
     - exampleusername2
 ```
-Change Instagram credentials to log in to your desired account.
-Change/add/remove target usernames to scrape.
+- Change Instagram credentials to log in to your desired account.
+- Change/add/remove target usernames to scrape.
