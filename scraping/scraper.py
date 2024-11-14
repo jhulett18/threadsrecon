@@ -79,11 +79,11 @@ class ThreadsScraper:
             # Try multiple methods to submit the login form
             password_input.send_keys(Keys.RETURN)  # This submits the form by pressing Enter
             print("Login attempt submitted by pressing Enter")
-            time.sleep(5)  # Wait for login to complete
+            time.sleep(3)  # Wait for login to complete
 
             # Wait for login to complete
             print("Waiting for login to complete...")
-            time.sleep(5)
+            time.sleep(3)
 
             # Check for successful login
             try:
@@ -158,17 +158,34 @@ class ThreadsScraper:
         return len(posts) + len(replies) + len(reposts)
 
 
+    def get_last_post_date(self):
+        """Get the date of the most recent post using BeautifulSoup"""
+        try:
+            # Get current page source and parse with BeautifulSoup
+            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+            
+            # Find the first post
+            posts = soup.find_all('div', class_='x78zum5 xdt5ytf')
+            if posts:
+                # Get the date from the first post
+                first_post = posts[0]
+                date_tag = first_post.find('time', class_='x1rg5ohu xnei2rj x2b8uid xuxw1ft')
+                if date_tag and 'datetime' in date_tag.attrs:
+                    return datetime.fromisoformat(date_tag['datetime'])
+        except Exception as e:
+            print(f"Error getting last post date: {str(e)}")
+        return None
+
     def fetch_profile(self, username):
         url = f"{self.base_url}/@{username}"
         self.driver.get(url)
-        time.sleep(3)
+        time.sleep(1)
+
+        profile_data = {'username': username}
 
         self.scroll_to_load_all_content()
 
-
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')    
-        profile_data = {'username': username}
-
 
         name = soup.find('h1', class_='x1lliihq x1plvlek xryxfnj x1n2onr6 x1ji0vk5 x18bv5gf x193iq5w xeuugli x1fj9vlw x13faqbe x1vvkbs x1s928wv xhkezso x1gmr53x x1cpjm7i x1fgarty x1943h6x x1i0vuye x133cpev x1xlr1w8 xp07o12 x1yc453h')
         if name:
@@ -257,24 +274,15 @@ class ThreadsScraper:
         profile_data['posts_count'] = num_posts
         print(f"Found {num_posts} posts")
         
-
-        first_post_date = None
-        last_post_date = None
-        # Iterate over each post and extract the date
-        for post in posts:
-            date_tag = post.find('time', class_='x1rg5ohu xnei2rj x2b8uid xuxw1ft') 
-            if date_tag:
-                # Extract the date (assuming it's in a recognizable format)
-                post_date = date_tag['datetime']  # or date_tag.text if the date is in text format
-                post_date_obj = datetime.fromisoformat(post_date)  # Parse the date to a datetime object
-
-                # Update first and last post dates
-                if first_post_date is None or post_date_obj < first_post_date:
-                    first_post_date = post_date_obj
-                    profile_data['first_post_date(YYYY/DD/MM)']=first_post_date
-                if last_post_date is None or post_date_obj > last_post_date:
-                    last_post_date = post_date_obj
-                    profile_data['last_post_date(YYYY/DD/MM)']=last_post_date
+        last_post_date = self.get_last_post_date()
+        if last_post_date:
+            profile_data['last_post_date(YYYY/DD/MM)'] = last_post_date
+        if posts:
+            last_post = posts[-1]
+            last_date_tag = last_post.find('time', class_='x1rg5ohu xnei2rj x2b8uid xuxw1ft')
+            if last_date_tag and 'datetime' in last_date_tag.attrs:
+                first_post_date = datetime.fromisoformat(last_date_tag['datetime'])
+                profile_data['first_post_date(YYYY/DD/MM)'] = first_post_date
 
 
         replies_url=f"{url}/replies"
