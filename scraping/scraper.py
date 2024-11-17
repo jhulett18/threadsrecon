@@ -18,19 +18,44 @@ from datetime import datetime
 import time
 
 class ThreadsScraper:
-    def __init__(self, base_url):
+    
+    def __init__(self, base_url, chromedriver):
         self.base_url = base_url
-        # Set up Chrome options
         self.chrome_options = Options()
-        #self.chrome_options.add_argument('--headless')  # Run in headless mode
+        self.chrome_options.add_argument('--headless=new')
+
+        # Optimize performance
         self.chrome_options.add_argument('--disable-gpu')
         self.chrome_options.add_argument('--no-sandbox')
         self.chrome_options.add_argument('--disable-dev-shm-usage')
+        self.chrome_options.add_argument('--disable-extensions')
+        self.chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+        self.chrome_options.add_argument('--disable-infobars')
+        self.chrome_options.add_argument('--ignore-certificate-errors')
+        self.chrome_options.add_argument('--disable-logging')
+        self.chrome_options.add_argument('--disable-popup-blocking')
+        self.chrome_options.add_argument('--enable-automation')
         self.chrome_options.add_argument('--window-size=1920,1080')
         self.chrome_options.add_argument('--start-maximized')
-        self.chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36')
-        
-        self.driver = webdriver.Chrome(service=Service('chromedriver'),options=self.chrome_options)
+        self.chrome_options.add_argument('--incognito')
+        self.chrome_options.add_argument(
+            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+        )
+
+        self.chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        self.chrome_options.add_experimental_option("useAutomationExtension", False)
+        self.chrome_options.add_argument('--log-level=3')
+        self.driver = webdriver.Chrome(service=Service(chromedriver), options=self.chrome_options)
+
+        # Adjust WebDriver to appear more human
+        self.driver.execute_cdp_cmd(
+            "Network.setUserAgentOverride",
+            {"userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"},
+        )
+        self.driver.execute_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+        )
+
         self.wait = WebDriverWait(self.driver, 20)
         self.is_logged_in = False
 
@@ -40,72 +65,135 @@ class ThreadsScraper:
             return True
 
         try:
+            # Handle cookies popup
+            def handle_cookies():
+                try:
+                    print("Looking for the Accept Cookies button...")
+                    accept_cookies_button = self.wait.until(
+                        EC.element_to_be_clickable((By.XPATH, "//div[text()='Allow all cookies']"))
+                    )
+                    accept_cookies_button.click()
+                    print("Accepted cookies")
+                except Exception as e:
+                    print(f"Could not find or click the Accept Cookies button: {str(e)}")
+                    self.driver.save_screenshot("accept_cookies_error.png")
+
+            # Check if credentials are provided
+            if username is None or password is None:
+                print("Attempting anonymous access...")
+                self.driver.get(self.base_url + "/login/")
+                time.sleep(2)
+                handle_cookies()
+
+                try:
+                    print("Selecting 'Use without a profile'...")
+                    use_without_profile_button = self.wait.until(
+                        EC.element_to_be_clickable((By.XPATH, "//a[@href='/nonconsent/']//span[text()='Use without a profile']"))
+                    )
+                    use_without_profile_button.click()
+                    print("Successfully selected 'Use without a profile'")
+                    self.is_logged_in = True
+                    return True
+                except Exception as e:
+                    print(f"Failed to select 'Use without a profile': {str(e)}")
+                    self.driver.save_screenshot("use_without_profile_error.png")
+                    return False
+
+                # Select "Use without a profile"
+                try:
+                    print("Selecting 'Use without a profile'...")
+                    use_without_profile_button = self.wait.until(
+                        EC.element_to_be_clickable((By.XPATH, "//div[text()='Use without a profile']"))
+                    )
+                    use_without_profile_button.click()
+                    print("Successfully selected 'Use without a profile'")
+                    self.is_logged_in = True
+                    return True
+                except Exception as e:
+                    print(f"Failed to select 'Use without a profile': {str(e)}")
+                    self.driver.save_screenshot("use_without_profile_error.png")
+                    return False
+
             print("Attempting to log in...")
-            # Go directly to Instagram login page
-            self.driver.get("https://threads.net/login/")
-            time.sleep(5)  # Wait for page to fully load
+            self.driver.get(self.base_url + "/login/?show_choice_screen=false")
+            time.sleep(2)
+            handle_cookies()
 
+            # Navigate to the login form
             try:
-                print("Looking for the Accept Cookies button...")
-                accept_cookies_button = self.wait.until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, "div[class*='x1i10hfl x1ypdohk x2lah0s xe8uvvx xdj266r x11i5rnm xat24cr x1mh8g0r x2lwn1j xexx8yu x18d9i69 x1n2onr6 x16tdsg8 x1hl2dhg xggy1nq x1ja2u2z x1t137rt x1q0g3np x1lku1pv x1a2a7pz x6s0dn4 x1a2cdl4 xnhgr82 x1qt0ttw xgk8upj x9f619 x3nfvp2 x1s688f x90ne7k xl56j7k x193iq5w x1swvt13 x1pi30zi x12w9bfk x1g2r6go x11xpdln xz4gly6 x87ps6o xuxw1ft x19kf12q x111bo7f x1vmvj1k x45e8q x3tjt7u x35z2i1 x13fuv20 xu3j5b3 x1q0q8m5 x26u7qi x178xt8z xm81vs4 xso031l xy80clv xteu7em x11r8ahe x1iyjqo2 x15x72sd']"))
-                )
-                accept_cookies_button.click()
-                print("Accepted cookies")
+                login_div = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'Log in')]")))
+                login_div.click()
+                print("Clicked login div, redirecting to login page...")
             except Exception as e:
-                print(f"No Accept Cookies button found or failed to click: {str(e)}")
+                print(f"Failed to click the login div: {str(e)}")
+                self.driver.save_screenshot("login_div_error.png")
+                return False
 
-            login_div = self.wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "div.x78zum5.xdt5ytf.xgpatz3.xyamay9")))
-            login_div.click()
-            print("Clicked login div, redirecting to login page...")
-            
-            print("Waiting for login form...")
-            # Wait for and fill in username
-            username_input = self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "input[value='']"))
-            )
-            print("Found username input")
-            username_input.clear()
-            username_input.send_keys(username)
-            time.sleep(1)
+            # Fill in username
+            try:
+                print("Waiting for login form...")
+                username_input = self.wait.until(
+                    EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Username, phone or email']"))
+                )
+                print("Found username input")
+                username_input.clear()
+                username_input.send_keys(username)
+                time.sleep(1)
+            except Exception as e:
+                print(f"Error locating or filling the username input: {str(e)}")
+                self.driver.save_screenshot("username_input_error.png")
+                return False
 
             # Fill in password
-            print("Entering password...")
-            password_input = self.driver.find_element(By.CSS_SELECTOR, "input[value='']")
-            password_input.clear()
-            password_input.send_keys(password)
-            time.sleep(1)
-
-            # Try multiple methods to submit the login form
-            password_input.send_keys(Keys.RETURN)  # This submits the form by pressing Enter
-            print("Login attempt submitted by pressing Enter")
-            time.sleep(5)  # Wait for login to complete
-
-            # Wait for login to complete
-            print("Waiting for login to complete...")
-            time.sleep(5)
-
-            # Check for successful login
             try:
-                # Try to find elements that would indicate successful login
-                self.wait.until(
+                print("Entering password...")
+                password_input = self.wait.until(
+                    EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Password']"))
+                )
+                password_input.clear()
+                password_input.send_keys(password + Keys.RETURN)  # Press Enter to submit
+                time.sleep(2)
+            except Exception as e:
+                print(f"Error entering password or submitting form: {str(e)}")
+                self.driver.save_screenshot("password_submit_error.png")
+                return False
+
+            # Verify login success or detect 2FA
+            try:
+                print("Checking login success...")
+                if self.wait.until(
                     EC.any_of(
                         EC.presence_of_element_located((By.CSS_SELECTOR, "svg[aria-label='Search']")),
                         EC.presence_of_element_located((By.CSS_SELECTOR, "svg[aria-label='Home']")),
                         EC.presence_of_element_located((By.CSS_SELECTOR, "input[placeholder='Search']"))
                     )
-                )
-                print("Login successful!")
-                self.is_logged_in = True
-                return True
+                ):
+                    print("Login successful!")
+                    self.is_logged_in = True
+                    return True
             except TimeoutException:
-                print("Could not verify login success")
-                return False
+                # Check for 2FA prompt
+                try:
+                    print("Login not confirmed. Checking for 2FA prompt...")
+                    if self.wait.until(
+                        EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Security code']"))
+                    ):
+                        print("2FA detected. Use an account with 2FA disabled for this script.")
+                        return False
+                except TimeoutException:
+                    print("No 2FA prompt detected. Login failed.")
+                except Exception as e:
+                    print(f"Unexpected error during 2FA detection: {str(e)}")
+
+            # If neither login success nor 2FA detected, assume login failed
+            print("Login failed.")
+            self.driver.save_screenshot("login_failure.png")
+            return False
 
         except Exception as e:
             print(f"Login failed: {str(e)}")
+            self.driver.save_screenshot("login_failed_error.png")
             return False
-
 
     def scroll_to_load_all_content(self):
         """Scroll down until all posts, replies, and reposts are loaded"""
@@ -165,18 +253,14 @@ class ThreadsScraper:
 
         self.scroll_to_load_all_content()
 
-
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')    
         profile_data = {'username': username}
-
 
         name = soup.find('h1', class_='x1lliihq x1plvlek xryxfnj x1n2onr6 x1ji0vk5 x18bv5gf x193iq5w xeuugli x1fj9vlw x13faqbe x1vvkbs x1s928wv xhkezso x1gmr53x x1cpjm7i x1fgarty x1943h6x x1i0vuye x133cpev x1xlr1w8 xp07o12 x1yc453h')
         if name:
             profile_data['name'] = name.get_text(strip=True)
         else:
             profile_data['name'] = "Name not found"
-
-
 
         profile_picture = soup.find('img', class_='xl1xv1r x14yjl9h xudhj91 x18nykt9 xww2gxu xvapks4 x1bgq0ue')
         if profile_picture:
@@ -188,8 +272,6 @@ class ThreadsScraper:
         else:
             profile_data['profile_picture'] = "Profile picture not found"
 
-
-
         bio_container = soup.find('div', class_='x17zef60')
         if bio_container:
             bio_text = bio_container.find('span', class_='x1lliihq')
@@ -199,18 +281,14 @@ class ThreadsScraper:
                 profile_data['bio'] = "Bio not found"
         else:
             profile_data['bio'] = "Bio not found"
-        
-
 
         followers = soup.find('div', class_='x78zum5 x2lah0s')
         if followers:
             followers_text = followers.find('span', class_='x1lliihq x1plvlek xryxfnj x1n2onr6 x1ji0vk5 x18bv5gf x193iq5w xeuugli x1fj9vlw x13faqbe x1vvkbs x1s928wv xhkezso x1gmr53x x1cpjm7i x1fgarty x1943h6x x1i0vuye xjohtrz xo1l8bm x12rw4y6 x1yc453h')
             if followers_text:
-                profile_data['followers'] = followers_text.get_text(strip=True)
+                profile_data['followers'] = followers_text.get_text(strip=True).replace('followers', '').strip()
             else:
                 profile_data['followers'] = "Followers not found"
-
-
 
         external = soup.find('div', class_='x1iyjqo2 xeuugli')
         if external:
@@ -219,8 +297,6 @@ class ThreadsScraper:
                 profile_data['external_links'] = external_text.get_text(strip=True)
             else:
                 profile_data['external_links'] = "External links not found"
-
-
         
         instagram = soup.find('div', class_='x6s0dn4 x78zum5 x1c4vz4f xykv574 x1i64zmx')
         if instagram:
@@ -304,6 +380,5 @@ class ThreadsScraper:
         else:
             profile_data['reposts']=num_reposts
         print(f"Found {num_reposts} reposts")
-
 
         return profile_data
