@@ -1,7 +1,18 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import os
 import sys
 from datetime import datetime
 from scraping.scraper import ThreadsScraper
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+os.chdir(script_dir)
+
+# Check for required Python version
+if sys.version_info < (3, 6):
+    print("Python 3.6 or higher is required. Please upgrade your Python version.")
+    sys.exit(1)
 
 # Utility to convert datetime to JSON serializable format
 def datetime_converter(obj):
