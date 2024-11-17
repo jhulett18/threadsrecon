@@ -4,7 +4,8 @@
 import os
 import sys
 from scraping.scraper import ThreadsScraper
-from analysis.sentiment_analysis import analyze_and_filter_data
+from analysis.sentiment_analysis import analyze_sentiment, process_posts
+from processing.data_processing import DataProcessor
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
@@ -94,15 +95,18 @@ def main():
     ANALYSIS
     '''
 
-    input_file = "data/profiles.json"
-    output_file = "data/archived_profiles.json"
-    filtered_file = "data/filtered_profiles.json"
+    processor = DataProcessor(config["AnalysisSettings"]["input_file"])
+    result = processor.process_and_archive(
+        config["AnalysisSettings"]["output_file"],
+        config["AnalysisSettings"]["keywords"],
+        config["AnalysisSettings"]["date_range"]["start"],
+        config["AnalysisSettings"]["date_range"]["end"]
+    )
+    
+    if result:
+        print(f"Processing complete. Processed {result['metadata']['total_posts']} posts.")
+    else:
+        print("No data to process.")
 
-    # Filter criteria
-    keyword_filter = "#Python"
-    date_filter = "2023-07-06T23:35:04.000Z"
-
-    # Run the analysis and filtering
-    analyze_and_filter_data(input_file, output_file, filtered_file, keyword_filter, date_filter)
 if __name__ == "__main__":
     main()
