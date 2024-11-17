@@ -145,6 +145,22 @@ class ThreadsScraper:
                 return False
 
             # Fill in password
+            print("Entering password...")
+            password_input = self.driver.find_element(By.CSS_SELECTOR, "input[value='']")
+            password_input.clear()
+            password_input.send_keys(password)
+            time.sleep(1)
+
+            # Try multiple methods to submit the login form
+            password_input.send_keys(Keys.RETURN)  # This submits the form by pressing Enter
+            print("Login attempt submitted by pressing Enter")
+            time.sleep(3)  # Wait for login to complete
+
+            # Wait for login to complete
+            print("Waiting for login to complete...")
+            time.sleep(3)
+
+            # Check for successful login
             try:
                 print("Entering password...")
                 password_input = self.wait.until(
@@ -194,8 +210,6 @@ class ThreadsScraper:
             print(f"Login failed: {str(e)}")
             self.driver.save_screenshot("login_failed_error.png")
             return False
-    
-    
     def extract_post_data(self, post_element):
         """Extract data from a post element"""
         try:
@@ -214,43 +228,22 @@ class ThreadsScraper:
             return None
 
     def extract_reply_data(self, reply_element):
-        """Extract data from a reply element including both original post and reply"""
+        """Extract data from a reply element"""
         try:
-            # Find all divs that could contain post content
-            content_divs = reply_element.find_all('div', class_='x1a2a7pz x1n2onr6')
+            text_element = reply_element.find('div', class_='x1a2a7pz x1n2onr6')
+            text = text_element.get_text(strip=True) if text_element else ""
             
-            if len(content_divs) < 2:
-                print("Warning: Could not find both original post and reply divs")
-                return None
-                
-            # Extract data from original post (first div)
-            original_post_div = content_divs[0]
-            original_post_text = original_post_div.find(
-                'div', 
-                class_='x1a6qonq x6ikm8r x10wlt62 xj0a0fe x126k92a x6prxxf x7r5mf7'
-            )
-            original_post_date = original_post_div.find('time')
-            original_post_author = original_post_div.find('span', class_='x6s0dn4 x78zum5 x1q0g3np') 
-            # Extract data from reply (second div)
-            reply_div = content_divs[1]
-            reply_text = reply_div.find(
-                'div', 
-                class_='x1a6qonq x6ikm8r x10wlt62 xj0a0fe x126k92a x6prxxf x7r5mf7'
-            )
-            reply_date = reply_div.find('time')
+            date_element = reply_element.find('time')
+            date_posted = date_element.get('datetime') if date_element else ""
+            
+            original_post = reply_element.find('div', class_='x1xdureb xkbb5z x13vxnyz')
+            original_post_data = self.extract_post_data(original_post) if original_post else None
             
             return {
-                "original_post": {
-                    "text": original_post_text.get_text(strip=True) if original_post_text else "",
-                    "date_posted": original_post_date.get('datetime') if original_post_date else "",
-                    "author": original_post_author.get_text(strip=True) if original_post_author else ""
-                },
-                "reply": {
-                    "text": reply_text.get_text(strip=True) if reply_text else "",
-                    "date_posted": reply_date.get('datetime') if reply_date else ""
-                }
+                "text": text,
+                "date_posted": date_posted,
+                "original_post": original_post_data
             }
-            
         except Exception as e:
             print(f"Error extracting reply data: {str(e)}")
             return None
@@ -264,7 +257,7 @@ class ThreadsScraper:
             date_element = repost_element.find('time')
             date_posted = date_element.get('datetime') if date_element else ""
             
-            original_poster_element = repost_element.find('span', class_='x6s0dn4 x78zum5 x1q0g3np')
+            original_poster_element = repost_element.find('a', class_='x1i10hfl xjbqb8w x1ejq31n xd10rxx x1sy0etr x17r0tee x972fbf xcfux6l x1qhh985 xm0m39n x9f619 x1ypdohk xt0psk2 xe8uvvx xdj266r x11i5rnm xat24cr x1mh8g0r xexx8yu x4uap5 x18d9i69 xkhd6sd x16tdsg8 x1hl2dhg xggy1nq x1a2a7pz xp07o12 xzmqwrg x1citr7e x1kdxza xt0b8zv')
             original_poster = original_poster_element.get_text(strip=True) if original_poster_element else ""
             
             return {
@@ -300,7 +293,7 @@ class ThreadsScraper:
                         content_index += 1
                         
             elif content_type == 'replies':
-                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
+                elements = soup.find_all('div', class_='x9f619 x1n2onr6 x1ja2u2z')
                 for element in elements[len(collected_content):]:
                     reply_data = self.extract_reply_data(element)
                     if reply_data:
@@ -329,9 +322,11 @@ class ThreadsScraper:
             time.sleep(2)
 
         return collected_content
-        
+
+
     def fetch_profile(self, username):
         url = f"{self.base_url}/@{username}"
+
         profile_data = {username: {
             "username": username,
             "name": "",
@@ -347,8 +342,9 @@ class ThreadsScraper:
             "reposts_count": 0,
             "reposts": {}
         }}
+
         self.driver.get(url)
-        time.sleep(2)
+        time.sleep(1)
 
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')    
 
@@ -424,7 +420,7 @@ class ThreadsScraper:
         else:
             profile_data[username]['instagram_link'] = "Instagram container not found"
 
-         # Collect posts
+        # Collect posts
         print("Collecting posts...")
         posts = self.scroll_and_collect_content('posts')
         profile_data[username]["posts"] = posts
@@ -445,5 +441,6 @@ class ThreadsScraper:
         reposts = self.scroll_and_collect_content('reposts')
         profile_data[username]["reposts"] = reposts
         profile_data[username]["reposts_count"] = len(reposts)
+
 
         return profile_data
