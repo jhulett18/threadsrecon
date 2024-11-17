@@ -22,7 +22,7 @@ class ThreadsScraper:
     def __init__(self, base_url, chromedriver):
         self.base_url = base_url
         self.chrome_options = Options()
-        self.chrome_options.add_argument('--headless=new')
+        #self.chrome_options.add_argument('--headless=new')
 
         # Optimize performance
         self.chrome_options.add_argument('--disable-gpu')
@@ -194,32 +194,133 @@ class ThreadsScraper:
             print(f"Login failed: {str(e)}")
             self.driver.save_screenshot("login_failed_error.png")
             return False
+    
+    
+    def extract_post_data(self, post_element):
+        """Extract data from a post element"""
+        try:
+            text_element = post_element.find('div', class_='x1a6qonq x6ikm8r x10wlt62 xj0a0fe x126k92a x6prxxf x7r5mf7')
+            text = text_element.get_text(strip=True) if text_element else ""
+            
+            date_element = post_element.find('time')
+            date_posted = date_element.get('datetime') if date_element else ""
+            
+            return {
+                "text": text,
+                "date_posted": date_posted
+            }
+        except Exception as e:
+            print(f"Error extracting post data: {str(e)}")
+            return None
 
-    def scroll_to_load_all_content(self):
-        """Scroll down until all posts, replies, and reposts are loaded"""
-        print("Starting to scroll and load content...")
+    def extract_reply_data(self, reply_element):
+        """Extract data from a reply element including both original post and reply"""
+        try:
+            # Find all divs that could contain post content
+            content_divs = reply_element.find_all('div', class_='x1a2a7pz x1n2onr6')
+            
+            if len(content_divs) < 2:
+                print("Warning: Could not find both original post and reply divs")
+                return None
+                
+            # Extract data from original post (first div)
+            original_post_div = content_divs[0]
+            original_post_text = original_post_div.find(
+                'div', 
+                class_='x1a6qonq x6ikm8r x10wlt62 xj0a0fe x126k92a x6prxxf x7r5mf7'
+            )
+            original_post_date = original_post_div.find('time')
+            original_post_author = original_post_div.find('span', class_='x6s0dn4 x78zum5 x1q0g3np') 
+            # Extract data from reply (second div)
+            reply_div = content_divs[1]
+            reply_text = reply_div.find(
+                'div', 
+                class_='x1a6qonq x6ikm8r x10wlt62 xj0a0fe x126k92a x6prxxf x7r5mf7'
+            )
+            reply_date = reply_div.find('time')
+            
+            return {
+                "original_post": {
+                    "text": original_post_text.get_text(strip=True) if original_post_text else "",
+                    "date_posted": original_post_date.get('datetime') if original_post_date else "",
+                    "author": original_post_author.get_text(strip=True) if original_post_author else ""
+                },
+                "reply": {
+                    "text": reply_text.get_text(strip=True) if reply_text else "",
+                    "date_posted": reply_date.get('datetime') if reply_date else ""
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error extracting reply data: {str(e)}")
+            return None
+
+    def extract_repost_data(self, repost_element):
+        """Extract data from a repost element"""
+        try:
+            text_element = repost_element.find('div', class_='x1a6qonq x6ikm8r x10wlt62 xj0a0fe x126k92a x6prxxf x7r5mf7')
+            text = text_element.get_text(strip=True) if text_element else ""
+            
+            date_element = repost_element.find('time')
+            date_posted = date_element.get('datetime') if date_element else ""
+            
+            original_poster_element = repost_element.find('span', class_='x6s0dn4 x78zum5 x1q0g3np')
+            original_poster = original_poster_element.get_text(strip=True) if original_poster_element else ""
+            
+            return {
+                "text": text,
+                "date_posted": date_posted,
+                "original_poster": original_poster
+            }
+        except Exception as e:
+            print(f"Error extracting repost data: {str(e)}")
+            return None
+
+    def scroll_and_collect_content(self, content_type='posts'):
+        """Scroll and collect content with progress tracking"""
+        print(f"Starting to collect {content_type}...")
         previous_content_count = 0
         same_count_iterations = 0
         max_same_count = 3
+        collected_content = {}
+        content_index = 1
 
         while True:
-            # Scroll to bottom
-            self.driver.execute_script(
-                "window.scrollTo(0, document.body.scrollHeight);"
-            )
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(2)
+            
+            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+            
+            if content_type == 'posts':
+                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
+                for element in elements[len(collected_content):]:
+                    post_data = self.extract_post_data(element)
+                    if post_data:
+                        collected_content[f"post {content_index}"] = post_data
+                        content_index += 1
+                        
+            elif content_type == 'replies':
+                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
+                for element in elements[len(collected_content):]:
+                    reply_data = self.extract_reply_data(element)
+                    if reply_data:
+                        collected_content[f"reply {content_index}"] = reply_data
+                        content_index += 1
+                        
+            elif content_type == 'reposts':
+                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
+                for element in elements[len(collected_content):]:
+                    repost_data = self.extract_repost_data(element)
+                    if repost_data:
+                        collected_content[f"repost {content_index}"] = repost_data
+                        content_index += 1
 
-            # Wait for any new posts, replies, or reposts to load
-            self.wait_for_content_to_load()
-
-            # Get current content count (posts + replies + reposts)
-            current_content_count = self.get_current_content_count()
-            print(f"Loading more content...")
+            current_content_count = len(elements)
+            print(f"Found {len(collected_content)} {content_type} so far...")
 
             if current_content_count == previous_content_count:
                 same_count_iterations += 1
                 if same_count_iterations >= max_same_count:
-                    print("Reached the end of content or hit a limit")
                     break
             else:
                 same_count_iterations = 0
@@ -227,76 +328,71 @@ class ThreadsScraper:
             previous_content_count = current_content_count
             time.sleep(2)
 
-    def wait_for_content_to_load(self):
-        """Wait for posts, replies, and reposts to be present on the page"""
-        try:
-            self.wait.until(
-                EC.presence_of_all_elements_located(
-                    (By.CSS_SELECTOR, 'div[class*="x78zum5 xdt5ytf"]')
-                )
-            )
-        except TimeoutException:
-            print("Timeout waiting for content to load")
-
-    def get_current_content_count(self):
-        """Get the current number of posts, replies, and reposts loaded on the page"""
-        posts = self.driver.find_elements(By.CSS_SELECTOR, 'div[class*="x78zum5 xdt5ytf"]')
-        replies = self.driver.find_elements(By.CSS_SELECTOR, 'div[class*="x9f619 x1n2onr6 x1ja2u2z"]') 
-        reposts = self.driver.find_elements(By.CSS_SELECTOR, 'div[class*="x78zum5 xdt5ytf"]')
-        return len(posts) + len(replies) + len(reposts)
-
-
+        return collected_content
+        
     def fetch_profile(self, username):
         url = f"{self.base_url}/@{username}"
+        profile_data = {username: {
+            "username": username,
+            "name": "",
+            "profile_picture": "",
+            "bio": "",
+            "followers": "",
+            "external_links": "",
+            "instagram": "",
+            "posts_count": 0,
+            "posts": {},
+            "replies_count": 0,
+            "replies": {},
+            "reposts_count": 0,
+            "reposts": {}
+        }}
         self.driver.get(url)
-        time.sleep(3)
-
-        self.scroll_to_load_all_content()
+        time.sleep(2)
 
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')    
-        profile_data = {'username': username}
 
         name = soup.find('h1', class_='x1lliihq x1plvlek xryxfnj x1n2onr6 x1ji0vk5 x18bv5gf x193iq5w xeuugli x1fj9vlw x13faqbe x1vvkbs x1s928wv xhkezso x1gmr53x x1cpjm7i x1fgarty x1943h6x x1i0vuye x133cpev x1xlr1w8 xp07o12 x1yc453h')
         if name:
-            profile_data['name'] = name.get_text(strip=True)
+            profile_data[username]['name'] = name.get_text(strip=True)
         else:
-            profile_data['name'] = "Name not found"
+            profile_data[username]['name'] = "Name not found"
 
         profile_picture = soup.find('img', class_='xl1xv1r x14yjl9h xudhj91 x18nykt9 xww2gxu xvapks4 x1bgq0ue')
         if profile_picture:
             image_url = profile_picture.get('src')
             if image_url:
-                profile_data['profile_picture'] = image_url
+                profile_data[username]['profile_picture'] = image_url
             else:
-                profile_data['profile_picture'] = "Profile picture not found"
+                profile_data[username]['profile_picture'] = "Profile picture not found"
         else:
-            profile_data['profile_picture'] = "Profile picture not found"
+            profile_data[username]['profile_picture'] = "Profile picture not found"
 
         bio_container = soup.find('div', class_='x17zef60')
         if bio_container:
             bio_text = bio_container.find('span', class_='x1lliihq')
             if bio_text:
-                profile_data['bio'] = bio_text.get_text(strip=True)
+                profile_data[username]['bio'] = bio_text.get_text(strip=True)
             else:
-                profile_data['bio'] = "Bio not found"
+                profile_data[username]['bio'] = "Bio not found"
         else:
-            profile_data['bio'] = "Bio not found"
+            profile_data[username]['bio'] = "Bio not found"
 
         followers = soup.find('div', class_='x78zum5 x2lah0s')
         if followers:
             followers_text = followers.find('span', class_='x1lliihq x1plvlek xryxfnj x1n2onr6 x1ji0vk5 x18bv5gf x193iq5w xeuugli x1fj9vlw x13faqbe x1vvkbs x1s928wv xhkezso x1gmr53x x1cpjm7i x1fgarty x1943h6x x1i0vuye xjohtrz xo1l8bm x12rw4y6 x1yc453h')
             if followers_text:
-                profile_data['followers'] = followers_text.get_text(strip=True).replace('followers', '').strip()
+                profile_data[username]['followers'] = followers_text.get_text(strip=True).replace('followers', '').strip()
             else:
-                profile_data['followers'] = "Followers not found"
+                profile_data[username]['followers'] = "Followers not found"
 
         external = soup.find('div', class_='x1iyjqo2 xeuugli')
         if external:
             external_text = external.find('span', class_='x1lliihq x1plvlek xryxfnj x1n2onr6 x1ji0vk5 x18bv5gf x193iq5w xeuugli x1fj9vlw x13faqbe x1vvkbs x1s928wv xhkezso x1gmr53x x1cpjm7i x1fgarty x1943h6x x1i0vuye xjohtrz xo1l8bm x12rw4y6 x1yc453h')
             if external_text:
-                profile_data['external_links'] = external_text.get_text(strip=True)
+                profile_data[username]['external_links'] = external_text.get_text(strip=True)
             else:
-                profile_data['external_links'] = "External links not found"
+                profile_data[username]['external_links'] = "External links not found"
         
         instagram = soup.find('div', class_='x6s0dn4 x78zum5 x1c4vz4f xykv574 x1i64zmx')
         if instagram:
@@ -317,68 +413,37 @@ class ThreadsScraper:
                     instagram_url = query_params.get('u', [None])[0]
                     if instagram_url:
                         cleaned_url = unquote(instagram_url)  # Decode the URL-encoded string
-                        profile_data['instagram'] = cleaned_url
+                        profile_data[username]['instagram'] = cleaned_url
                     else:
-                        profile_data['instagram'] = "Instagram URL not found in 'u' parameter"
+                        profile_data[username]['instagram'] = "Instagram URL not found in 'u' parameter"
                 else:
                     # If the URL doesn't have query params, directly use the href
-                    profile_data['instagram_link'] = instagram_url
+                    profile_data[username]['instagram_link'] = instagram_url
             else:
-                profile_data['instagram_link'] = "Instagram link not found"
+                profile_data[username]['instagram_link'] = "Instagram link not found"
         else:
-            profile_data['instagram_link'] = "Instagram container not found"
+            profile_data[username]['instagram_link'] = "Instagram container not found"
 
-        posts = soup.find_all('div', class_='x78zum5 xdt5ytf')
-        num_posts =len(posts)
-        profile_data['posts_count'] = num_posts
-        print(f"Found {num_posts} posts")
-        
+         # Collect posts
+        print("Collecting posts...")
+        posts = self.scroll_and_collect_content('posts')
+        profile_data[username]["posts"] = posts
+        profile_data[username]["posts_count"] = len(posts)
 
-        first_post_date = None
-        last_post_date = None
-        # Iterate over each post and extract the date
-        for post in posts:
-            date_tag = post.find('time', class_='x1rg5ohu xnei2rj x2b8uid xuxw1ft') 
-            if date_tag:
-                # Extract the date (assuming it's in a recognizable format)
-                post_date = date_tag['datetime']  # or date_tag.text if the date is in text format
-                post_date_obj = datetime.fromisoformat(post_date)  # Parse the date to a datetime object
+        # Collect replies
+        print("Collecting replies...")
+        self.driver.get(f"{url}/replies")
+        time.sleep(2)
+        replies = self.scroll_and_collect_content('replies')
+        profile_data[username]["replies"] = replies
+        profile_data[username]["replies_count"] = len(replies)
 
-                # Update first and last post dates
-                if first_post_date is None or post_date_obj < first_post_date:
-                    first_post_date = post_date_obj
-                    profile_data['first_post_date(YYYY/DD/MM)']=first_post_date
-                if last_post_date is None or post_date_obj > last_post_date:
-                    last_post_date = post_date_obj
-                    profile_data['last_post_date(YYYY/DD/MM)']=last_post_date
-
-
-        replies_url=f"{url}/replies"
-        self.driver.get(replies_url)
-        self.scroll_to_load_all_content()
-        soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-
-        replies = soup.find_all('div', class_='x9f619 x1n2onr6 x1ja2u2z')
-        num_replies =len(replies)-1
-        if num_replies == 0:
-            profile_data['replies']="No replies found"
-        else:
-            profile_data['replies']=num_replies
-        print(f"Found {num_replies} replies")
-
-
-
-        reposts_url=f"{url}/reposts"
-        self.driver.get(reposts_url)
-        self.scroll_to_load_all_content()
-        soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-
-        reposts = soup.find_all('div', class_='x78zum5 xdt5ytf')
-        num_reposts =len(reposts)
-        if num_reposts == 0:
-            profile_data['reposts']="No reposts found"
-        else:
-            profile_data['reposts']=num_reposts
-        print(f"Found {num_reposts} reposts")
+        # Collect reposts
+        print("Collecting reposts...")
+        self.driver.get(f"{url}/reposts")
+        time.sleep(2)
+        reposts = self.scroll_and_collect_content('reposts')
+        profile_data[username]["reposts"] = reposts
+        profile_data[username]["reposts_count"] = len(reposts)
 
         return profile_data
