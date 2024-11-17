@@ -4,7 +4,10 @@ processing/__pycache__/
 reports/__pycache__/
 scraping/__pycache__/
 visualization/__pycache__/
+
 data/profiles.json
+data/archived_profiles.json
+data/filtered_profiles.json
 chromedriver
 settings.ini
 settings.yaml

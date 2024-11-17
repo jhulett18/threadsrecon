@@ -22,7 +22,7 @@ class ThreadsScraper:
     def __init__(self, base_url, chromedriver):
         self.base_url = base_url
         self.chrome_options = Options()
-        #self.chrome_options.add_argument('--headless=new')
+        self.chrome_options.add_argument('--headless=new')
 
         # Optimize performance
         self.chrome_options.add_argument('--disable-gpu')

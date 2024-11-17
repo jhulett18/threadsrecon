@@ -3,8 +3,8 @@
 
 import os
 import sys
-from datetime import datetime
 from scraping.scraper import ThreadsScraper
+from analysis.sentiment_analysis import analyze_and_filter_data
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
@@ -14,13 +14,12 @@ if sys.version_info < (3, 6):
     print("Python 3.6 or higher is required. Please upgrade your Python version.")
     sys.exit(1)
 
-# Utility to convert datetime to JSON serializable format
-def datetime_converter(obj):
-    if isinstance(obj, datetime):
-        return obj.isoformat()  # Converts to "YYYY-MM-DDTHH:MM:SS" format
-    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 def main():
+    '''
+    Scraping and adding to JSON
+    '''
+
     # Check for 'data' folder
     if not os.path.exists("data"):
         print("Creating 'data' folder...")
@@ -87,9 +86,23 @@ def main():
 
         # Write data to JSON file
         with open("data/profiles.json", "w") as json_file:
-            json.dump(all_profiles_data, json_file, indent=4, default=datetime_converter)
+            json.dump(all_profiles_data, json_file, indent=4)
     finally:
         scraper.driver.quit()
 
+    '''
+    ANALYSIS
+    '''
+
+    input_file = "data/profiles.json"
+    output_file = "data/archived_profiles.json"
+    filtered_file = "data/filtered_profiles.json"
+
+    # Filter criteria
+    keyword_filter = "#Python"
+    date_filter = "2023-07-06T23:35:04.000Z"
+
+    # Run the analysis and filtering
+    analyze_and_filter_data(input_file, output_file, filtered_file, keyword_filter, date_filter)
 if __name__ == "__main__":
     main()
