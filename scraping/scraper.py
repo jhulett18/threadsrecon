@@ -58,7 +58,7 @@ class ThreadsScraper:
 
         self.wait = WebDriverWait(self.driver, 20)
         self.is_logged_in = False
-
+    
     def login(self, username, password):
         """Log into Threads using Instagram credentials with improved error handling"""
         if self.is_logged_in:
@@ -332,7 +332,7 @@ class ThreadsScraper:
         
     def fetch_profile(self, username):
         url = f"{self.base_url}/@{username}"
-        profile_data = {username: {
+        profile_data = {
             "username": username,
             "name": "",
             "profile_picture": "",
@@ -346,104 +346,88 @@ class ThreadsScraper:
             "replies": {},
             "reposts_count": 0,
             "reposts": {}
-        }}
+        }
         self.driver.get(url)
         time.sleep(2)
 
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')    
-
-        name = soup.find('h1', class_='x1lliihq x1plvlek xryxfnj x1n2onr6 x1ji0vk5 x18bv5gf x193iq5w xeuugli x1fj9vlw x13faqbe x1vvkbs x1s928wv xhkezso x1gmr53x x1cpjm7i x1fgarty x1943h6x x1i0vuye x133cpev x1xlr1w8 xp07o12 x1yc453h')
-        if name:
-            profile_data[username]['name'] = name.get_text(strip=True)
-        else:
-            profile_data[username]['name'] = "Name not found"
-
-        profile_picture = soup.find('img', class_='xl1xv1r x14yjl9h xudhj91 x18nykt9 xww2gxu xvapks4 x1bgq0ue')
-        if profile_picture:
-            image_url = profile_picture.get('src')
-            if image_url:
-                profile_data[username]['profile_picture'] = image_url
-            else:
-                profile_data[username]['profile_picture'] = "Profile picture not found"
-        else:
-            profile_data[username]['profile_picture'] = "Profile picture not found"
-
-        bio_container = soup.find('div', class_='x17zef60')
-        if bio_container:
-            bio_text = bio_container.find('span', class_='x1lliihq')
-            if bio_text:
-                profile_data[username]['bio'] = bio_text.get_text(strip=True)
-            else:
-                profile_data[username]['bio'] = "Bio not found"
-        else:
-            profile_data[username]['bio'] = "Bio not found"
-
-        followers = soup.find('div', class_='x78zum5 x2lah0s')
-        if followers:
-            followers_text = followers.find('span', class_='x1lliihq x1plvlek xryxfnj x1n2onr6 x1ji0vk5 x18bv5gf x193iq5w xeuugli x1fj9vlw x13faqbe x1vvkbs x1s928wv xhkezso x1gmr53x x1cpjm7i x1fgarty x1943h6x x1i0vuye xjohtrz xo1l8bm x12rw4y6 x1yc453h')
-            if followers_text:
-                profile_data[username]['followers'] = followers_text.get_text(strip=True).replace('followers', '').strip()
-            else:
-                profile_data[username]['followers'] = "Followers not found"
-
-        external = soup.find('div', class_='x1iyjqo2 xeuugli')
-        if external:
-            external_text = external.find('span', class_='x1lliihq x1plvlek xryxfnj x1n2onr6 x1ji0vk5 x18bv5gf x193iq5w xeuugli x1fj9vlw x13faqbe x1vvkbs x1s928wv xhkezso x1gmr53x x1cpjm7i x1fgarty x1943h6x x1i0vuye xjohtrz xo1l8bm x12rw4y6 x1yc453h')
-            if external_text:
-                profile_data[username]['external_links'] = external_text.get_text(strip=True)
-            else:
-                profile_data[username]['external_links'] = "External links not found"
         
-        instagram = soup.find('div', class_='x6s0dn4 x78zum5 x1c4vz4f xykv574 x1i64zmx')
-        if instagram:
-            # Find the anchor tag with the Instagram profile link (assuming this structure)
-            anchor_tag = instagram.find('a', href=True)
-
-            if anchor_tag:
-                # Extract the Instagram URL from the 'href' attribute
-                instagram_url = anchor_tag['href']
-                
-                # Check if the URL contains query parameters
+        name = soup.find('h1', {"dir": "auto"})
+        if name:
+            profile_data['name'] = name.get_text(strip=True)
+        else:
+            profile_data['name'] = "Name not found"
+        
+        
+        profile_picture = soup.find('meta',{'property':'og:image'})
+        if profile_picture:
+            image_url = profile_picture.get('content')
+            if image_url:
+                profile_data['profile_picture'] = image_url
+            else:
+                profile_data['profile_picture'] = "Profile picture not found"
+        else:
+            profile_data['profile_picture'] = "Profile picture not found"
+        
+        
+        bio = self.driver.find_element(By.XPATH, '(//span[@dir="auto"])[4]')
+        if bio:
+                profile_data['bio'] = bio.text.strip()
+        else:
+                profile_data['bio'] = "Bio not found"
+        
+        
+        followers = self.driver.find_element(By.XPATH, '(//span[@dir="auto"])[5]')
+        if followers:
+                profile_data['followers'] = followers.text.strip().replace('followers', '').strip()
+        else:
+                profile_data['followers'] = "Followers not found"
+        
+        
+        external_links = soup.find_all('link', {"rel": "me"}) 
+        if external_links:
+                profile_data['external_links'] = [link.get('href') for link in external_links]
+        else:
+                profile_data['external_links'] = "External links not found"
+        
+        try:
+            instagram = self.driver.find_element(By.XPATH, '//a[contains(@href, "threads.net") and contains(@href, "instagram.com")]')
+            if instagram:
+                instagram_url = instagram.get_attribute('href')
                 if 'u=' in instagram_url:
-                    # Parse the URL and decode the 'u' parameter
                     parsed_url = urlparse(instagram_url)
                     query_params = parse_qs(parsed_url.query)
-
-                    # Extract the Instagram URL from the 'u' parameter and decode it
                     instagram_url = query_params.get('u', [None])[0]
                     if instagram_url:
-                        cleaned_url = unquote(instagram_url)  # Decode the URL-encoded string
-                        profile_data[username]['instagram'] = cleaned_url
+                        profile_data['instagram'] = unquote(instagram_url)
                     else:
-                        profile_data[username]['instagram'] = "Instagram URL not found in 'u' parameter"
+                        profile_data['instagram'] = "Instagram URL not found in 'u' parameter"
                 else:
-                    # If the URL doesn't have query params, directly use the href
-                    profile_data[username]['instagram_link'] = instagram_url
-            else:
-                profile_data[username]['instagram_link'] = "Instagram link not found"
-        else:
-            profile_data[username]['instagram_link'] = "Instagram container not found"
+                    profile_data['instagram'] = instagram_url
+        except Exception as e:
+            print(f"Instagram link not found: {str(e)}")
+            profile_data['instagram'] = "Instagram link not found"
 
          # Collect posts
         print("Collecting posts...")
         posts = self.scroll_and_collect_content('posts')
-        profile_data[username]["posts"] = posts
-        profile_data[username]["posts_count"] = len(posts)
+        profile_data["posts"] = posts
+        profile_data["posts_count"] = len(posts)
 
         # Collect replies
         print("Collecting replies...")
         self.driver.get(f"{url}/replies")
         time.sleep(2)
         replies = self.scroll_and_collect_content('replies')
-        profile_data[username]["replies"] = replies
-        profile_data[username]["replies_count"] = len(replies)
+        profile_data["replies"] = replies
+        profile_data["replies_count"] = len(replies)
 
         # Collect reposts
         print("Collecting reposts...")
         self.driver.get(f"{url}/reposts")
         time.sleep(2)
         reposts = self.scroll_and_collect_content('reposts')
-        profile_data[username]["reposts"] = reposts
-        profile_data[username]["reposts_count"] = len(reposts)
+        profile_data["reposts"] = reposts
+        profile_data["reposts_count"] = len(reposts)
 
-        return profile_data
+        return {username: profile_data}

@@ -29,6 +29,16 @@ ScraperSettings:
   usernames:
     - target_username
     - target_username2
+
+AnalysisSettings:
+ input_file: data/profiles.json
+ output_file: data/analyzed_profiles.json
+ keywords: 
+  - keyword1
+  - keyword2
+ date_range: 
+  start: "2023-01-01"
+  end: "2024-01-01"
 ```
 
 ## Running
