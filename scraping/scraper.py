@@ -16,13 +16,14 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs, unquote
 from datetime import datetime
 import time
+import random
 
 class ThreadsScraper:
     
     def __init__(self, base_url, chromedriver):
         self.base_url = base_url
         self.chrome_options = Options()
-        self.chrome_options.add_argument('--headless=new')
+        #self.chrome_options.add_argument('--headless=new')
 
         # Optimize performance
         self.chrome_options.add_argument('--disable-gpu')
@@ -38,9 +39,12 @@ class ThreadsScraper:
         self.chrome_options.add_argument('--window-size=1920,1080')
         self.chrome_options.add_argument('--start-maximized')
         self.chrome_options.add_argument('--incognito')
-        self.chrome_options.add_argument(
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
-        )
+        self.user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'
+        ]
+        self.chrome_options.add_argument(f'--user-agent={random.choice(self.user_agents)}')
 
         self.chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         self.chrome_options.add_experimental_option("useAutomationExtension", False)
@@ -185,6 +189,18 @@ class ThreadsScraper:
                 except Exception as e:
                     print(f"Unexpected error during 2FA detection: {str(e)}")
 
+                try:
+                    print("Checking for automated behavior warning...")
+                    dismiss_button = self.wait.until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "div[role='button'][aria-label='Dismiss']"))
+                    )
+                    dismiss_button.click()
+                    print("Dismissed automated behavior warning")
+                except Exception as e:
+                    print(f"No automated behavior warning found or could not dismiss: {str(e)}")
+                
+                self.is_logged_in = True
+                return True
             # If neither login success nor 2FA detected, assume login failed
             print("Login failed.")
             self.driver.save_screenshot("login_failure.png")
@@ -199,16 +215,39 @@ class ThreadsScraper:
     def extract_post_data(self, post_element):
         """Extract data from a post element"""
         try:
-            text_element = post_element.find('div', class_='x1a6qonq x6ikm8r x10wlt62 xj0a0fe x126k92a x6prxxf x7r5mf7')
-            text = text_element.get_text(strip=True) if text_element else ""
-            
-            date_element = post_element.find('time')
-            date_posted = date_element.get('datetime') if date_element else ""
-            
-            return {
-                "text": text,
-                "date_posted": date_posted
-            }
+            # Find the main text container without relying on specific class names
+            text_container = post_element.find('div', recursive=False)
+
+            # If the text container exists, extract text
+            if text_container:
+                # Get all text from the container
+                raw_text = text_container.get_text(separator=" ", strip=True)
+
+                # Split into main text and metadata if "Like" is present
+                if " Like " in raw_text:
+                    post_text, metadata = raw_text.rsplit(" Like ", 1)
+                    metadata = f"Like {metadata.strip()}"
+                else:
+                    post_text, metadata = raw_text, ""
+
+                # Remove unwanted prefixes from the post text
+                start_keywords = ["Follow", "More"]
+                cleaned_text = post_text  # Focus only on the main post text
+
+                for keyword in start_keywords:
+                    if keyword in cleaned_text:
+                        # Remove everything before the first keyword occurrence
+                        cleaned_text = cleaned_text.split(keyword, 1)[-1]
+
+                # Extract the date from the `time` element
+                date_element = post_element.find('time')
+                date_posted = date_element.get('datetime') if date_element else ""
+
+                return {
+                    "text": cleaned_text.strip(),
+                    "date_posted": date_posted,
+                    "metadata": metadata.strip()
+                }
         except Exception as e:
             print(f"Error extracting post data: {str(e)}")
             return None
@@ -292,7 +331,7 @@ class ThreadsScraper:
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
             
             if content_type == 'posts':
-                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
+                elements = soup.find_all('div', attrs={'data-pressable-container': 'true'})
                 for element in elements[len(collected_content):]:
                     post_data = self.extract_post_data(element)
                     if post_data:
@@ -300,7 +339,7 @@ class ThreadsScraper:
                         content_index += 1
                         
             elif content_type == 'replies':
-                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
+                elements = soup.find_all('div', attrs={'data-pressable-container': 'true'})
                 for element in elements[len(collected_content):]:
                     reply_data = self.extract_reply_data(element)
                     if reply_data:
@@ -308,7 +347,7 @@ class ThreadsScraper:
                         content_index += 1
                         
             elif content_type == 'reposts':
-                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
+                elements = soup.find_all('div', attrs={'data-pressable-container': 'true'})
                 for element in elements[len(collected_content):]:
                     repost_data = self.extract_repost_data(element)
                     if repost_data:
@@ -429,5 +468,5 @@ class ThreadsScraper:
         reposts = self.scroll_and_collect_content('reposts')
         profile_data["reposts"] = reposts
         profile_data["reposts_count"] = len(reposts)
-
+        
         return {username: profile_data}
