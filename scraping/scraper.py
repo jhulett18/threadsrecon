@@ -23,7 +23,7 @@ class ThreadsScraper:
     def __init__(self, base_url, chromedriver):
         self.base_url = base_url
         self.chrome_options = Options()
-        #self.chrome_options.add_argument('--headless=new')
+        self.chrome_options.add_argument('--headless=new')
 
         # Optimize performance
         self.chrome_options.add_argument('--disable-gpu')
@@ -189,6 +189,7 @@ class ThreadsScraper:
                 except Exception as e:
                     print(f"Unexpected error during 2FA detection: {str(e)}")
 
+                # Check for automated behavior warning
                 try:
                     print("Checking for automated behavior warning...")
                     dismiss_button = self.wait.until(
@@ -196,11 +197,12 @@ class ThreadsScraper:
                     )
                     dismiss_button.click()
                     print("Dismissed automated behavior warning")
+                    self.is_logged_in = True
+                    return True
                 except Exception as e:
                     print(f"No automated behavior warning found or could not dismiss: {str(e)}")
                 
-                self.is_logged_in = True
-                return True
+                return False
             # If neither login success nor 2FA detected, assume login failed
             print("Login failed.")
             self.driver.save_screenshot("login_failure.png")
@@ -253,67 +255,80 @@ class ThreadsScraper:
             return None
 
     def extract_reply_data(self, reply_element):
-        """Extract data from a reply element including both original post and reply"""
+        """Extract data from a reply element, including both original post and reply."""
         try:
-            # Find all divs that could contain post content
-            content_divs = reply_element.find_all('div', class_='x1a2a7pz x1n2onr6')
-            
-            if len(content_divs) < 2:
+            # Find divs containing time elements (original post and reply)
+            post_divs = [div for div in reply_element.find_all('div') if div.find('time')]
+
+            if len(post_divs) < 2:
                 print("Warning: Could not find both original post and reply divs")
                 return None
-                
-            # Extract data from original post (first div)
-            original_post_div = content_divs[0]
-            original_post_text = original_post_div.find(
-                'div', 
-                class_='x1a6qonq x6ikm8r x10wlt62 xj0a0fe x126k92a x6prxxf x7r5mf7'
-            )
+
+            # Extract original post data
+            original_post_div = post_divs[0]
+            original_post_text = original_post_div.find('span', dir='auto')
             original_post_date = original_post_div.find('time')
-            original_post_author = original_post_div.find('span', class_='x6s0dn4 x78zum5 x1q0g3np') 
-            # Extract data from reply (second div)
-            reply_div = content_divs[1]
-            reply_text = reply_div.find(
-                'div', 
-                class_='x1a6qonq x6ikm8r x10wlt62 xj0a0fe x126k92a x6prxxf x7r5mf7'
-            )
+            original_post_author = original_post_div.find('a', role='link')
+
+            # Extract reply data
+            reply_div = post_divs[1]
+            reply_text = reply_div.find('span', dir='auto')
             reply_date = reply_div.find('time')
-            
+
             return {
-                "original_post": {
-                    "text": original_post_text.get_text(strip=True) if original_post_text else "",
-                    "date_posted": original_post_date.get('datetime') if original_post_date else "",
-                    "author": original_post_author.get_text(strip=True) if original_post_author else ""
+                'original_post': {
+                    'text': original_post_text.text.strip() if original_post_text else None,
+                    'date': original_post_date['datetime'].strip() if original_post_date else None,
+                    'author': original_post_author.text.strip() if original_post_author else None
                 },
-                "reply": {
-                    "text": reply_text.get_text(strip=True) if reply_text else "",
-                    "date_posted": reply_date.get('datetime') if reply_date else ""
+                'reply': {
+                    'text': reply_text.text.strip() if reply_text else None,
+                    'date': reply_date['datetime'].strip() if reply_date else None
                 }
             }
-            
         except Exception as e:
-            print(f"Error extracting reply data: {str(e)}")
+            print(f"Error extracting reply data: {e}")
             return None
+
 
     def extract_repost_data(self, repost_element):
         """Extract data from a repost element"""
         try:
-            text_element = repost_element.find('div', class_='x1a6qonq x6ikm8r x10wlt62 xj0a0fe x126k92a x6prxxf x7r5mf7')
-            text = text_element.get_text(strip=True) if text_element else ""
+            # Find the main text container without relying on specific class names 
+            text_container = repost_element.find('div', recursive=False)
             
-            date_element = repost_element.find('time')
-            date_posted = date_element.get('datetime') if date_element else ""
-            
-            original_poster_element = repost_element.find('span', class_='x6s0dn4 x78zum5 x1q0g3np')
-            original_poster = original_poster_element.get_text(strip=True) if original_poster_element else ""
-            
-            return {
-                "text": text,
-                "date_posted": date_posted,
-                "original_poster": original_poster
-            }
+            if text_container:
+                # Get all text from the container
+                raw_text = text_container.get_text(separator=" ", strip=True)
+                
+                # Split into main text and metadata if "Like" is present
+                if " Like " in raw_text:
+                    post_text, metadata = raw_text.rsplit(" Like ", 1)
+                    metadata = f"Like {metadata.strip()}"
+                else:
+                    post_text, metadata = raw_text, ""
+
+                # Remove unwanted prefixes
+                start_keywords = ["Follow", "More"] 
+                cleaned_text = post_text
+                for keyword in start_keywords:
+                    if keyword in cleaned_text:
+                        cleaned_text = cleaned_text.split(keyword, 1)[-1]
+
+                # Extract date
+                date_element = repost_element.find('time')
+                date_posted = date_element.get('datetime') if date_element else ""
+
+                return {
+                    "text": cleaned_text.strip(),
+                    "date_posted": date_posted,
+                    "metadata": metadata.strip()
+                }
+
         except Exception as e:
             print(f"Error extracting repost data: {str(e)}")
             return None
+        return None
 
     def scroll_and_collect_content(self, content_type='posts'):
         """Scroll and collect content with progress tracking"""
@@ -331,7 +346,7 @@ class ThreadsScraper:
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
             
             if content_type == 'posts':
-                elements = soup.find_all('div', attrs={'data-pressable-container': 'true'})
+                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
                 for element in elements[len(collected_content):]:
                     post_data = self.extract_post_data(element)
                     if post_data:
@@ -339,7 +354,7 @@ class ThreadsScraper:
                         content_index += 1
                         
             elif content_type == 'replies':
-                elements = soup.find_all('div', attrs={'data-pressable-container': 'true'})
+                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
                 for element in elements[len(collected_content):]:
                     reply_data = self.extract_reply_data(element)
                     if reply_data:
@@ -347,7 +362,7 @@ class ThreadsScraper:
                         content_index += 1
                         
             elif content_type == 'reposts':
-                elements = soup.find_all('div', attrs={'data-pressable-container': 'true'})
+                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
                 for element in elements[len(collected_content):]:
                     repost_data = self.extract_repost_data(element)
                     if repost_data:
@@ -446,13 +461,13 @@ class ThreadsScraper:
         except Exception as e:
             print(f"Instagram link not found: {str(e)}")
             profile_data['instagram'] = "Instagram link not found"
-
+        '''
          # Collect posts
         print("Collecting posts...")
         posts = self.scroll_and_collect_content('posts')
         profile_data["posts"] = posts
         profile_data["posts_count"] = len(posts)
-
+        '''
         # Collect replies
         print("Collecting replies...")
         self.driver.get(f"{url}/replies")
@@ -460,7 +475,7 @@ class ThreadsScraper:
         replies = self.scroll_and_collect_content('replies')
         profile_data["replies"] = replies
         profile_data["replies_count"] = len(replies)
-
+        '''
         # Collect reposts
         print("Collecting reposts...")
         self.driver.get(f"{url}/reposts")
@@ -468,5 +483,5 @@ class ThreadsScraper:
         reposts = self.scroll_and_collect_content('reposts')
         profile_data["reposts"] = reposts
         profile_data["reposts_count"] = len(reposts)
-        
+        '''
         return {username: profile_data}
