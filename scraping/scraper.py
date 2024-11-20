@@ -23,7 +23,7 @@ class ThreadsScraper:
     def __init__(self, base_url, chromedriver):
         self.base_url = base_url
         self.chrome_options = Options()
-        #self.chrome_options.add_argument('--headless=new')
+        self.chrome_options.add_argument('--headless=new')
 
         # Optimize performance
         self.chrome_options.add_argument('--disable-gpu')
@@ -220,74 +220,65 @@ class ThreadsScraper:
             # Find the main text container without relying on specific class names
             text_container = post_element.find('div', recursive=False)
 
-            # If the text container exists, extract text
-            if text_container:
-                # Get all text from the container
-                raw_text = text_container.get_text(separator=" ", strip=True)
 
-                # Split into main text and metadata if "Like" is present
-                if " Like " in raw_text:
-                    post_text, metadata = raw_text.rsplit(" Like ", 1)
-                    metadata = f"Like {metadata.strip()}"
-                else:
-                    post_text, metadata = raw_text, ""
-
-                # Remove unwanted prefixes from the post text
-                start_keywords = ["Follow", "More"]
-                cleaned_text = post_text  # Focus only on the main post text
-
-                for keyword in start_keywords:
-                    if keyword in cleaned_text:
-                        # Remove everything before the first keyword occurrence
-                        cleaned_text = cleaned_text.split(keyword, 1)[-1]
+            post_cleaned, post_metadata = self.clean_and_extract_metadata(text_container)
 
                 # Extract the date from the `time` element
-                date_element = post_element.find('time')
-                date_posted = date_element.get('datetime') if date_element else ""
+            date_element = post_element.find('time')
+            date_posted = date_element.get('datetime') if date_element else ""
 
-                return {
-                    "text": cleaned_text.strip(),
-                    "date_posted": date_posted,
-                    "metadata": metadata.strip()
-                }
+            return {
+                "text": post_cleaned,
+                "date_posted": date_posted,
+                "metadata": post_metadata
+            }
         except Exception as e:
             print(f"Error extracting post data: {str(e)}")
             return None
 
     def extract_reply_data(self, reply_element):
-        """Extract data from a reply element, including both original post and reply."""
+        """Extract data from a reply element including both original post and reply"""
         try:
-            # Find divs containing time elements (original post and reply)
-            post_divs = [div for div in reply_element.find_all('div') if div.find('time')]
+            # Find all divs that could contain post content
+            content_divs = reply_element.find_all('div')
 
-            if len(post_divs) < 2:
+            if len(content_divs) < 2:
                 print("Warning: Could not find both original post and reply divs")
                 return None
 
-            # Extract original post data
-            original_post_div = post_divs[0]
-            original_post_text = original_post_div.find('span', dir='auto')
+            # Extract data from original post (first div)
+            original_post_div = content_divs[0]
+            original_post_text = original_post_div.find('div', recursive=False)
             original_post_date = original_post_div.find('time')
-            original_post_author = original_post_div.find('a', role='link')
+            original_post_author = original_post_div.find('a', href=True) 
 
-            # Extract reply data
-            reply_div = post_divs[1]
-            reply_text = reply_div.find('span', dir='auto')
+            # Clean and extract metadata from the original post text
+            original_post_cleaned, original_metadata = self.clean_and_extract_metadata(original_post_text)
+
+            # Extract data from reply (second div)
+            reply_div = content_divs[0]
+            reply_text = reply_div.find('div', recursive=False)
             reply_date = reply_div.find('time')
 
+            # Clean and extract metadata from the reply text
+            reply_cleaned, reply_metadata = self.clean_and_extract_metadata(reply_text)
+
             return {
-                'original_post': {
-                    'text': original_post_text.text.strip() if original_post_text else None,
-                    'date': original_post_date['datetime'].strip() if original_post_date else None,
-                    'author': original_post_author.text.strip() if original_post_author else None
+                "original_post": {
+                    "text": original_post_cleaned,
+                    "date_posted": original_post_date.get('datetime') if original_post_date else "",
+                    "author": original_post_author.get_text(strip=True) if original_post_author else "",
+                    "metadata": original_metadata
                 },
-                'reply': {
-                    'text': reply_text.text.strip() if reply_text else None,
-                    'date': reply_date['datetime'].strip() if reply_date else None
+                "reply": {
+                    "text": reply_cleaned,
+                    "date_posted": reply_date.get('datetime') if reply_date else "",
+                    "metadata": reply_metadata
                 }
             }
+
         except Exception as e:
-            print(f"Error extracting reply data: {e}")
+            print(f"Error extracting reply data: {str(e)}")
             return None
 
 
@@ -297,38 +288,47 @@ class ThreadsScraper:
             # Find the main text container without relying on specific class names 
             text_container = repost_element.find('div', recursive=False)
             
-            if text_container:
-                # Get all text from the container
-                raw_text = text_container.get_text(separator=" ", strip=True)
-                
-                # Split into main text and metadata if "Like" is present
-                if " Like " in raw_text:
-                    post_text, metadata = raw_text.rsplit(" Like ", 1)
-                    metadata = f"Like {metadata.strip()}"
-                else:
-                    post_text, metadata = raw_text, ""
-
-                # Remove unwanted prefixes
-                start_keywords = ["Follow", "More"] 
-                cleaned_text = post_text
-                for keyword in start_keywords:
-                    if keyword in cleaned_text:
-                        cleaned_text = cleaned_text.split(keyword, 1)[-1]
+           
+            reply_cleaned, reply_metadata = self.clean_and_extract_metadata(text_container)
 
                 # Extract date
-                date_element = repost_element.find('time')
-                date_posted = date_element.get('datetime') if date_element else ""
+            date_element = repost_element.find('time')
+            date_posted = date_element.get('datetime') if date_element else ""
 
-                return {
-                    "text": cleaned_text.strip(),
-                    "date_posted": date_posted,
-                    "metadata": metadata.strip()
-                }
+            return {
+                "text": reply_cleaned,
+                "date_posted": date_posted,
+                "metadata": reply_metadata
+            }
 
         except Exception as e:
             print(f"Error extracting repost data: {str(e)}")
             return None
         return None
+    
+    def clean_and_extract_metadata(self, text_element):
+        """Cleans text and extracts metadata"""
+        if not text_element:
+            return "", ""
+
+        raw_text = text_element.get_text(separator=" ", strip=True)
+
+        # Split into main text and metadata if "Like" is present
+        if " Like " in raw_text:
+            main_text, metadata = raw_text.rsplit(" Like ", 1)
+            metadata = f"Like {metadata.strip()}"
+        else:
+            main_text, metadata = raw_text, ""
+
+        # Remove unwanted prefixes from the main text
+        start_keywords = ["Follow", "More"]
+        cleaned_text = main_text  # Focus only on the main post text
+
+        for keyword in start_keywords:
+            if keyword in cleaned_text:
+                cleaned_text = cleaned_text.split(keyword, 1)[-1]
+
+        return cleaned_text.strip(), metadata.strip()
 
     def scroll_and_collect_content(self, content_type='posts'):
         """Scroll and collect content with progress tracking"""
@@ -461,13 +461,13 @@ class ThreadsScraper:
         except Exception as e:
             print(f"Instagram link not found: {str(e)}")
             profile_data['instagram'] = "Instagram link not found"
-        
+        '''
          # Collect posts
         print("Collecting posts...")
         posts = self.scroll_and_collect_content('posts')
         profile_data["posts"] = posts
         profile_data["posts_count"] = len(posts)
-        
+        '''
         # Collect replies
         print("Collecting replies...")
         self.driver.get(f"{url}/replies")
@@ -475,7 +475,7 @@ class ThreadsScraper:
         replies = self.scroll_and_collect_content('replies')
         profile_data["replies"] = replies
         profile_data["replies_count"] = len(replies)
-        
+        '''
         # Collect reposts
         print("Collecting reposts...")
         self.driver.get(f"{url}/reposts")
@@ -483,5 +483,5 @@ class ThreadsScraper:
         reposts = self.scroll_and_collect_content('reposts')
         profile_data["reposts"] = reposts
         profile_data["reposts_count"] = len(reposts)
-        
+        '''
         return {username: profile_data}
