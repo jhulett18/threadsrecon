@@ -98,6 +98,7 @@ def main():
     processor = DataProcessor(config["AnalysisSettings"]["input_file"])
     result = processor.process_and_archive(
         config["AnalysisSettings"]["output_file"],
+        config["AnalysisSettings"]["archive_file"],
         config["AnalysisSettings"]["keywords"],
         config["AnalysisSettings"]["date_range"]["start"],
         config["AnalysisSettings"]["date_range"]["end"]

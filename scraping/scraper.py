@@ -23,7 +23,7 @@ class ThreadsScraper:
     def __init__(self, base_url, chromedriver):
         self.base_url = base_url
         self.chrome_options = Options()
-        self.chrome_options.add_argument('--headless=new')
+        #self.chrome_options.add_argument('--headless=new')
 
         # Optimize performance
         self.chrome_options.add_argument('--disable-gpu')
@@ -461,13 +461,13 @@ class ThreadsScraper:
         except Exception as e:
             print(f"Instagram link not found: {str(e)}")
             profile_data['instagram'] = "Instagram link not found"
-        '''
+        
          # Collect posts
         print("Collecting posts...")
         posts = self.scroll_and_collect_content('posts')
         profile_data["posts"] = posts
         profile_data["posts_count"] = len(posts)
-        '''
+        
         # Collect replies
         print("Collecting replies...")
         self.driver.get(f"{url}/replies")
@@ -475,7 +475,7 @@ class ThreadsScraper:
         replies = self.scroll_and_collect_content('replies')
         profile_data["replies"] = replies
         profile_data["replies_count"] = len(replies)
-        '''
+        
         # Collect reposts
         print("Collecting reposts...")
         self.driver.get(f"{url}/reposts")
@@ -483,5 +483,5 @@ class ThreadsScraper:
         reposts = self.scroll_and_collect_content('reposts')
         profile_data["reposts"] = reposts
         profile_data["reposts_count"] = len(reposts)
-        '''
+        
         return {username: profile_data}

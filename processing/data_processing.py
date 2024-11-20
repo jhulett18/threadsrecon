@@ -28,15 +28,29 @@ class DataProcessor:
         
         pattern = '|'.join(keywords)
         return df[df['text'].str.contains(pattern, case=False, na=False)]
-    
-    def process_and_archive(self, output_file, keywords=None, start_date=None, end_date=None):
+
+    def archive_profiles(self, output_file):
+        """Archive raw profile data with metadata"""
+        archive = {
+            'metadata': {
+                'archived_date': datetime.now().isoformat(),
+                'total_profiles': len(self.data),
+                'profile_usernames': list(self.data.keys())
+            },
+            'profiles': self.data
+        }
+        
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(archive, f, ensure_ascii=False, indent=4)
+
+    def process_and_archive(self, output_file, archive_file, keywords=None, start_date=None, end_date=None):
         """Process, filter and archive data"""
         all_posts_data = []
         
         # Process each profile
         for username, profile_data in self.data.items():
-            if isinstance(profile_data, dict) and 'posts' in profile_data.get(username, {}):
-                posts = profile_data[username]['posts']
+            if isinstance(profile_data, dict) and 'posts' in profile_data:
+                posts = profile_data['posts']
                 posts_df = process_posts(posts)
                 posts_df['username'] = username
                 all_posts_data.append(posts_df)
@@ -49,7 +63,15 @@ class DataProcessor:
             filtered_df = self.filter_by_date(combined_df, start_date, end_date)
             filtered_df = self.filter_by_keywords(filtered_df, keywords)
             
-            # Save to file
+           # Archive raw profiles
+        self.archive_profiles(archive_file)
+        
+        # Process posts
+        if all_posts_data:
+            combined_df = pd.concat(all_posts_data, ignore_index=True)
+            filtered_df = self.filter_by_date(combined_df, start_date, end_date)
+            filtered_df = self.filter_by_keywords(filtered_df, keywords)
+            
             result = {
                 'metadata': {
                     'total_posts': len(filtered_df),
@@ -67,7 +89,5 @@ class DataProcessor:
             
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(result, f, ensure_ascii=False, indent=4)
-            
             return result
-        
         return None

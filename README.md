@@ -32,6 +32,7 @@ ScraperSettings:
 
 AnalysisSettings:
  input_file: data/profiles.json
+ archive_file: data/archived_profiles.json
  output_file: data/analyzed_profiles.json
  keywords: 
   - keyword1
