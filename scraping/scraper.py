@@ -240,7 +240,7 @@ class ThreadsScraper:
         """Extract data from a reply element including both original post and reply"""
         try:
             # Find all divs that could contain post content
-            content_divs = reply_element.find_all('div')
+            content_divs = reply_element.find_all('div', attrs={"data-pressable-container":"true"})
 
             if len(content_divs) < 2:
                 print("Warning: Could not find both original post and reply divs")
@@ -256,7 +256,7 @@ class ThreadsScraper:
             original_post_cleaned, original_metadata = self.clean_and_extract_metadata(original_post_text)
 
             # Extract data from reply (second div)
-            reply_div = content_divs[0]
+            reply_div = content_divs[1]
             reply_text = reply_div.find('div', recursive=False)
             reply_date = reply_div.find('time')
 
@@ -280,7 +280,6 @@ class ThreadsScraper:
         except Exception as e:
             print(f"Error extracting reply data: {str(e)}")
             return None
-
 
     def extract_repost_data(self, repost_element):
         """Extract data from a repost element"""
