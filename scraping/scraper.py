@@ -23,7 +23,7 @@ class ThreadsScraper:
     def __init__(self, base_url, chromedriver):
         self.base_url = base_url
         self.chrome_options = Options()
-        self.chrome_options.add_argument('--headless=new')
+        #self.chrome_options.add_argument('--headless=new')
 
         # Optimize performance
         self.chrome_options.add_argument('--disable-gpu')
@@ -332,55 +332,85 @@ class ThreadsScraper:
     def scroll_and_collect_content(self, content_type='posts'):
         """Scroll and collect content with progress tracking"""
         print(f"Starting to collect {content_type}...")
-        previous_content_count = 0
         same_count_iterations = 0
         max_same_count = 3
+        processed_timestamps = set()  # Track unique timestamps
         collected_content = {}
         content_index = 1
-
+        
         while True:
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(2)
             
-            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+            # XPath patterns for different content types
+            # Replies maybe work maybe not, cant see because cba making a new account
+            xpath_patterns = {
+                'posts': """//div[
+                    .//img[contains(@alt, 'profile picture')] and
+                    .//time and
+                    .//span[@dir='auto']
+                ]""",
+                'replies': """//div[
+                    .//img[contains(@alt, 'profile picture')] and
+                    .//time and
+                    .//span[@dir='auto'] and
+                    .//div[@style='--lpa98a5]']
+                ]""",
+                'reposts': """//div[
+                    .//img[contains(@alt, 'profile picture')] and
+                    .//time and
+                    .//span[@dir='auto']
+                ]"""
+            }
             
-            if content_type == 'posts':
-                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
-                for element in elements[len(collected_content):]:
-                    post_data = self.extract_post_data(element)
-                    if post_data:
-                        collected_content[f"post {content_index}"] = post_data
-                        content_index += 1
-                        
-            elif content_type == 'replies':
-                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
-                for element in elements[len(collected_content):]:
-                    reply_data = self.extract_reply_data(element)
-                    if reply_data:
-                        collected_content[f"reply {content_index}"] = reply_data
-                        content_index += 1
-                        
-            elif content_type == 'reposts':
-                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
-                for element in elements[len(collected_content):]:
-                    repost_data = self.extract_repost_data(element)
-                    if repost_data:
-                        collected_content[f"repost {content_index}"] = repost_data
-                        content_index += 1
-
-            current_content_count = len(elements)
-            print(f"Found {len(collected_content)} {content_type} so far...")
-
-            if current_content_count == previous_content_count:
+            elements = self.driver.find_elements('xpath', xpath_patterns[content_type])
+            
+            new_elements = []
+            for element in elements:
+                try:
+                    # Get timestamp and username to create a unique identifier
+                    timestamp = element.find_element('xpath', './/time').get_attribute('datetime')
+                    username = element.find_element('xpath', ".//span[contains(@dir, 'auto')]").text
+                    unique_id = f"{timestamp}_{username}"
+                    
+                    if unique_id not in processed_timestamps:
+                        new_elements.append(element)
+                        processed_timestamps.add(unique_id)
+                except Exception as e:
+                    print(f"Error getting identifier: {str(e)}")
+                    continue
+            
+            if not new_elements:
                 same_count_iterations += 1
                 if same_count_iterations >= max_same_count:
                     break
             else:
                 same_count_iterations = 0
-
-            previous_content_count = current_content_count
+            
+            for element in new_elements:
+                try:
+                    soup_element = BeautifulSoup(element.get_attribute('outerHTML'), 'html.parser')
+                    
+                    # Extract data based on content type
+                    content_data = None
+                    if content_type == 'posts':
+                        content_data = self.extract_post_data(soup_element)
+                    elif content_type == 'replies':
+                        content_data = self.extract_reply_data(soup_element)
+                    else:  # reposts
+                        content_data = self.extract_repost_data(soup_element)
+                    
+                    if content_data and content_data.get('text'):  # Only add if we have meaningful content
+                        collected_content[f"{content_type[:-1]} {content_index}"] = content_data
+                        content_index += 1
+                        print(f"Added new {content_type[:-1]}: {content_data['text'][:100]}...")  # Debug print
+                    
+                except Exception as e:
+                    print(f"Error processing element: {str(e)}")
+            
+            print(f"Found {len(collected_content)} {content_type} so far...")
             time.sleep(2)
-
+        
         return collected_content
         
     def fetch_profile(self, username):
