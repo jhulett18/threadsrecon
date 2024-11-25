@@ -304,7 +304,38 @@ class ThreadsScraper:
             print(f"Error extracting repost data: {str(e)}")
             return None
         return None
-    
+
+    def extract_follower_data(self, follower_element):
+        """Extract username and display name from a follower element using robust selectors"""
+        try:
+            # Find link with role="link" and get the username from href
+            link = follower_element.find('a', attrs={'role': 'link'})
+            if not link:
+                return None
+            username = link['href'].strip('/@')
+            
+            # Find the display name by looking for the last span with dir="auto"
+            # that contains text within the link's parent structure
+            spans = follower_element.find_all('span', attrs={'dir': 'auto'})
+            name = None
+            for span in spans:
+                # Look for the span that has text and doesn't contain the username
+                span_text = span.get_text(strip=True)
+                if span_text and span_text != username:
+                    name = span_text
+                    break
+            
+            if username and name:
+                return {
+                    "username": username,
+                    "name": name
+                }
+            return None
+            
+        except Exception as e:
+            print(f"Error extracting follower data: {str(e)}")
+            return None
+
     def clean_and_extract_metadata(self, text_element):
         """Cleans text and extracts metadata"""
         if not text_element:
@@ -343,7 +374,7 @@ class ThreadsScraper:
             time.sleep(2)
 
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-
+            #Need to change from class names
             if content_type == 'posts':
                 elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
                 for element in elements[len(collected_content):]:
@@ -368,6 +399,14 @@ class ThreadsScraper:
                         collected_content[f"repost {content_index}"] = repost_data
                         content_index += 1
 
+            elif content_type == 'followers':
+                elements = soup.find_all('div', class_='x78zum5 xdt5ytf x5kalc8 xl56j7k xeuugli x1sxyh0')
+                for element in elements[len(collected_content):]:
+                    follower_data = self.extract_follower_data(element)
+                    if follower_data:
+                        collected_content[f"follower {content_index}"] = follower_data
+                        content_index += 1
+
             current_content_count = len(elements)
             print(f"Found {len(collected_content)} {content_type} so far...")
 
@@ -382,7 +421,7 @@ class ThreadsScraper:
             time.sleep(2)
 
         return collected_content
-        
+
     def fetch_profile(self, username):
         url = f"{self.base_url}/@{username}"
         profile_data = {
@@ -390,9 +429,10 @@ class ThreadsScraper:
             "name": "",
             "profile_picture": "",
             "bio": "",
-            "followers": "",
             "external_links": "",
             "instagram": "",
+            "followers_count": "",
+            "followers":{},
             "posts_count": 0,
             "posts": {},
             "replies_count": 0,
@@ -430,13 +470,6 @@ class ThreadsScraper:
                 profile_data['bio'] = "Bio not found"
         
         
-        followers = self.driver.find_element(By.XPATH, '(//span[@dir="auto"])[5]')
-        if followers:
-                profile_data['followers'] = followers.text.strip().replace('followers', '').strip()
-        else:
-                profile_data['followers'] = "Followers not found"
-        
-        
         external_links = soup.find_all('link', {"rel": "me"}) 
         if external_links:
                 profile_data['external_links'] = [link.get('href') for link in external_links]
@@ -460,14 +493,57 @@ class ThreadsScraper:
         except Exception as e:
             print(f"Instagram link not found: {str(e)}")
             profile_data['instagram'] = "Instagram link not found"
-        '''
-         # Collect posts
+
+        #Collect followers
+        followers_count = self.driver.find_element(By.XPATH, '//span[@dir="auto"][contains(text(), " followers")]')
+        if followers_count:
+            profile_data['followers_count'] = followers_count.text.strip().replace('followers', '').strip()
+            
+            # Click to open followers window
+            followers_count.click()
+            
+            # Wait a moment for the window to fully open
+            time.sleep(2)
+            # Create ActionChains instance
+            actions = ActionChains(self.driver)
+            followers_container = self.driver.find_element(By.XPATH, '//div[@role="dialog"]')
+            
+            # Move mouse to the container
+            actions.move_to_element(followers_container).perform()
+            time.sleep(1) 
+
+            followers = self.scroll_and_collect_content('followers')
+            profile_data["followers"] = followers
+
+            # Try multiple methods to close the window
+            try:
+                # Method 1: ActionChains
+                actions.send_keys(Keys.ESCAPE).perform()
+                time.sleep(1) 
+                
+                # If that didn't work, try Method 2: Direct to body
+                if len(self.driver.find_elements(By.XPATH, "//div[contains(@role, 'dialog')]")) > 0:
+                    self.driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
+                    time.sleep(1)
+                    
+                # If still open, try Method 3: Click close button if it exists
+                if len(self.driver.find_elements(By.XPATH, "//div[contains(@role, 'dialog')]")) > 0:
+                    close_button = self.driver.find_element(By.XPATH, "//button[@aria-label='Close' or contains(@class, 'close')]")
+                    close_button.click()
+                    
+            except Exception as e:
+                print(f"Error closing followers window: {e}")
+        else:
+            profile_data['followers_count'] = "Followers not found"
+
+
+        # Collect posts
         print("Collecting posts...")
         posts = self.scroll_and_collect_content('posts')
         profile_data["posts"] = posts
         profile_data["posts_count"] = len(posts)
-        '''
-        '''
+
+        
         # Collect replies
         print("Collecting replies...")
         self.driver.get(f"{url}/replies")
@@ -475,7 +551,7 @@ class ThreadsScraper:
         replies = self.scroll_and_collect_content('replies')
         profile_data["replies"] = replies
         profile_data["replies_count"] = len(replies)
-        '''
+        
         # Collect reposts
         print("Collecting reposts...")
         self.driver.get(f"{url}/reposts")
