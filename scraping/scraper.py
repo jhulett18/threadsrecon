@@ -369,10 +369,27 @@ class ThreadsScraper:
         collected_content = {}
         content_index = 1
 
+        
         while True:
-            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(2)
+            if content_type == 'followers':
+                # Find the followers dialog
+                dialog = self.driver.find_element("css selector", "div[role='dialog']")
+                if dialog:
+                    # Find the scrollable div inside the popup
+                    scroll_div = dialog.find_element("css selector", "div[class='x9f619 x1s85apg xds687c xg01cxk xexx8yu x18d9i69 x1e558r4 x150jy0e x47corl x10l6tqk x13vifvy x1n4smgl x1d8287x x19991ni xwji4o3 x1kky2od']")
+                    
+                    # Scroll the container
+                    self.driver.execute_script(
+                        "arguments[0].scrollTo(0, arguments[0].scrollHeight);", 
+                        scroll_div
+                    )
+            else:
+                # Original scrolling for other content types
+                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
+                
+            time.sleep(2)
+            
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
             #Need to change from class names
             if content_type == 'posts':
@@ -407,6 +424,15 @@ class ThreadsScraper:
                         collected_content[f"follower {content_index}"] = follower_data
                         content_index += 1
 
+
+            elif content_type == 'following':
+                elements = soup.find_all('div', class_='x78zum5 xdt5ytf x5kalc8 xl56j7k xeuugli x1sxyh0')
+                for element in elements[len(collected_content):]:
+                    following_data = self.extract_follower_data(element)
+                    if following_data:
+                        collected_content[f"following {content_index}"] = following_data
+                        content_index += 1
+
             current_content_count = len(elements)
             print(f"Found {len(collected_content)} {content_type} so far...")
 
@@ -433,6 +459,8 @@ class ThreadsScraper:
             "instagram": "",
             "followers_count": "",
             "followers":{},
+            "following_count": "",
+            "following":{},
             "posts_count": 0,
             "posts": {},
             "replies_count": 0,
@@ -504,16 +532,20 @@ class ThreadsScraper:
             
             # Wait a moment for the window to fully open
             time.sleep(2)
-            # Create ActionChains instance
             actions = ActionChains(self.driver)
-            followers_container = self.driver.find_element(By.XPATH, '//div[@role="dialog"]')
-            
-            # Move mouse to the container
-            actions.move_to_element(followers_container).perform()
-            time.sleep(1) 
 
             followers = self.scroll_and_collect_content('followers')
             profile_data["followers"] = followers
+
+            #Collect following
+            following_container = self.driver.find_element(By.XPATH,'//span[@dir="auto"][contains(text(), "Following")]')
+            following_count = self.driver.find_element(By.XPATH, '//div[@aria-label="Following"]//span[@title]').get_attribute('title')
+            profile_data['following_count'] = following_count
+
+            following_container.click()
+            following = self.scroll_and_collect_content('following')
+            profile_data["following"] = following
+
 
             # Try multiple methods to close the window
             try:
@@ -536,7 +568,8 @@ class ThreadsScraper:
         else:
             profile_data['followers_count'] = "Followers not found"
 
-
+            
+        '''
         # Collect posts
         print("Collecting posts...")
         posts = self.scroll_and_collect_content('posts')
@@ -559,5 +592,6 @@ class ThreadsScraper:
         reposts = self.scroll_and_collect_content('reposts')
         profile_data["reposts"] = reposts
         profile_data["reposts_count"] = len(reposts)
+        '''
         
         return {username: profile_data}
