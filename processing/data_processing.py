@@ -7,12 +7,44 @@ class DataProcessor:
     def __init__(self, input_file):
         self.input_file = input_file
         self.data = self.load_data()
-        
+        self.add_mutual_follower_status()
+
     def load_data(self):
         """Load JSON data from file"""
         with open(self.input_file, 'r', encoding='utf-8') as f:
             return json.load(f)
-    
+
+    def add_mutual_follower_status(self):
+        """Add is_mutual field to followers/following data"""
+        for username, profile_data in self.data.items():
+            if isinstance(profile_data, dict):
+                followers = profile_data.get('followers', {})
+                following = profile_data.get('following', {})
+                
+                # Convert to sets of usernames for efficient comparison
+                follower_usernames = set(followers.keys()) if isinstance(followers, dict) else set()
+                following_usernames = set(following.keys()) if isinstance(following, dict) else set()
+                
+                # Update followers with mutual status
+                for follower_username, follower_data in followers.items():
+                    is_mutual = follower_username in following_usernames
+                    if isinstance(follower_data, dict):
+                        follower_data['is_mutual'] = is_mutual
+                    else:
+                        followers[follower_username] = {'is_mutual': is_mutual}
+                
+                # Update following with mutual status
+                for following_username, following_data in following.items():
+                    is_mutual = following_username in follower_usernames
+                    if isinstance(following_data, dict):
+                        following_data['is_mutual'] = is_mutual
+                    else:
+                        following[following_username] = {'is_mutual': is_mutual}
+
+                # Update the profile data
+                profile_data['followers'] = followers
+                profile_data['following'] = following
+
     def filter_by_date(self, df, start_date=None, end_date=None):
         """Filter DataFrame by date range"""
         if start_date:
@@ -55,6 +87,7 @@ class DataProcessor:
                 posts_df['username'] = username
                 all_posts_data.append(posts_df)
         
+        
         # Combine all posts
         if all_posts_data:
             combined_df = pd.concat(all_posts_data, ignore_index=True)
@@ -63,15 +96,24 @@ class DataProcessor:
             filtered_df = self.filter_by_date(combined_df, start_date, end_date)
             filtered_df = self.filter_by_keywords(filtered_df, keywords)
             
-           # Archive raw profiles
+
+        # Combine all posts
+        if all_posts_data:
+            combined_df = pd.concat(all_posts_data, ignore_index=True)
+            
+            # Apply filters
+            filtered_df = self.filter_by_date(combined_df, start_date, end_date)
+            filtered_df = self.filter_by_keywords(filtered_df, keywords)
+            
+        # Archive raw profiles
         self.archive_profiles(archive_file)
-        
+
         # Process posts
         if all_posts_data:
             combined_df = pd.concat(all_posts_data, ignore_index=True)
             filtered_df = self.filter_by_date(combined_df, start_date, end_date)
             filtered_df = self.filter_by_keywords(filtered_df, keywords)
-            
+
             result = {
                 'metadata': {
                     'total_posts': len(filtered_df),
@@ -86,7 +128,7 @@ class DataProcessor:
                 },
                 'posts': filtered_df.to_dict('records')
             }
-            
+
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(result, f, ensure_ascii=False, indent=4)
             return result
