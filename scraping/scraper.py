@@ -202,7 +202,6 @@ class ThreadsScraper:
                 except Exception as e:
                     print(f"No automated behavior warning found or could not dismiss: {str(e)}")
                 
-                return False
             # If neither login success nor 2FA detected, assume login failed
             print("Login failed.")
             self.driver.save_screenshot("login_failure.png")
