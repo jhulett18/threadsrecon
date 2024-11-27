@@ -368,29 +368,33 @@ class ThreadsScraper:
         collected_content = {}
         content_index = 1
 
-        
         while True:
-            if content_type == 'followers':
-                # Find the followers dialog
-                dialog = self.driver.find_element("css selector", "div[role='dialog']")
-                if dialog:
-                    # Find the scrollable div inside the popup
-                    scroll_div = dialog.find_element("css selector", "div[class='x9f619 x1s85apg xds687c xg01cxk xexx8yu x18d9i69 x1e558r4 x150jy0e x47corl x10l6tqk x13vifvy x1n4smgl x1d8287x x19991ni xwji4o3 x1kky2od']")
-                    
-                    # Scroll the container
-                    self.driver.execute_script(
-                        "arguments[0].scrollTo(0, arguments[0].scrollHeight);", 
-                        scroll_div
-                    )
+            if content_type == 'followers' or content_type == 'following':
+                try:
+                    # Find the main dialog container
+                    dialog = self.driver.find_element("css selector", "div[role='dialog']")
+                    if dialog:
+                        # Find the scrollable container using the class from your HTML
+                        scrollable_div = dialog.find_element("css selector", "div.xb57i2i")
+                        
+                        # Scroll down the container
+                        self.driver.execute_script("""
+                            arguments[0].scrollTo({
+                                top: arguments[0].scrollHeight,
+                                behavior: 'smooth'
+                            });
+                        """, scrollable_div)
+                except Exception as e:
+                    print(f"Scrolling error: {e}")
+                    break
             else:
                 # Original scrolling for other content types
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
-                
             time.sleep(2)
             
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-            #Need to change from class names
+            
             if content_type == 'posts':
                 elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
                 for element in elements[len(collected_content):]:
@@ -422,7 +426,6 @@ class ThreadsScraper:
                     if follower_data:
                         collected_content[f"follower {content_index}"] = follower_data
                         content_index += 1
-
 
             elif content_type == 'following':
                 elements = soup.find_all('div', class_='x78zum5 xdt5ytf x5kalc8 xl56j7k xeuugli x1sxyh0')
