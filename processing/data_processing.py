@@ -11,8 +11,12 @@ class DataProcessor:
 
     def load_data(self):
         """Load JSON data from file"""
-        with open(self.input_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(self.input_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            print(f"Input file {self.input_file} not found. Creating empty data structure.")
+            return {}
 
     def add_mutual_follower_status(self):
         """Add is_mutual field to followers/following data"""
@@ -47,6 +51,8 @@ class DataProcessor:
 
     def filter_by_date(self, df, start_date=None, end_date=None):
         """Filter DataFrame by date range"""
+        if df.empty:
+            return df
         if start_date:
             df = df[df['date_posted'] >= start_date]
         if end_date:
@@ -55,7 +61,7 @@ class DataProcessor:
     
     def filter_by_keywords(self, df, keywords):
         """Filter DataFrame by keywords in text"""
-        if not keywords:
+        if df.empty or not keywords:
             return df
         
         pattern = '|'.join(keywords)
@@ -72,64 +78,60 @@ class DataProcessor:
             'profiles': self.data
         }
         
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(archive, f, ensure_ascii=False, indent=4)
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(archive, f, ensure_ascii=False, indent=4)
+            print(f"Successfully archived profiles to {output_file}")
+        except Exception as e:
+            print(f"Error archiving profiles: {str(e)}")
 
     def process_and_archive(self, output_file, archive_file, keywords=None, start_date=None, end_date=None):
         """Process, filter and archive data"""
+        # Create empty DataFrame with required columns
+        empty_df = pd.DataFrame(columns=['username', 'text', 'date_posted', 'likes', 'replies'])
+        
         all_posts_data = []
         
         # Process each profile
         for username, profile_data in self.data.items():
-            if isinstance(profile_data, dict) and 'posts' in profile_data:
-                posts = profile_data['posts']
-                posts_df = process_posts(posts)
-                posts_df['username'] = username
-                all_posts_data.append(posts_df)
+            if isinstance(profile_data, dict):
+                posts = profile_data.get('posts', [])
+                if posts:
+                    posts_df = process_posts(posts)
+                    posts_df['username'] = username
+                    all_posts_data.append(posts_df)
         
+        # Combine all posts or use empty DataFrame if no posts
+        combined_df = pd.concat(all_posts_data, ignore_index=True) if all_posts_data else empty_df
         
-        # Combine all posts
-        if all_posts_data:
-            combined_df = pd.concat(all_posts_data, ignore_index=True)
-            
-            # Apply filters
-            filtered_df = self.filter_by_date(combined_df, start_date, end_date)
-            filtered_df = self.filter_by_keywords(filtered_df, keywords)
-            
-
-        # Combine all posts
-        if all_posts_data:
-            combined_df = pd.concat(all_posts_data, ignore_index=True)
-            
-            # Apply filters
-            filtered_df = self.filter_by_date(combined_df, start_date, end_date)
-            filtered_df = self.filter_by_keywords(filtered_df, keywords)
-            
+        # Apply filters (will work on empty DataFrame)
+        filtered_df = self.filter_by_date(combined_df, start_date, end_date)
+        filtered_df = self.filter_by_keywords(filtered_df, keywords)
+        
         # Archive raw profiles
         self.archive_profiles(archive_file)
 
-        # Process posts
-        if all_posts_data:
-            combined_df = pd.concat(all_posts_data, ignore_index=True)
-            filtered_df = self.filter_by_date(combined_df, start_date, end_date)
-            filtered_df = self.filter_by_keywords(filtered_df, keywords)
-
-            result = {
-                'metadata': {
-                    'total_posts': len(filtered_df),
-                    'processed_date': datetime.now().isoformat(),
-                    'filters_applied': {
-                        'keywords': keywords,
-                        'date_range': {
-                            'start': start_date,
-                            'end': end_date
-                        }
+        # Create result dictionary
+        result = {
+            'metadata': {
+                'total_posts': len(filtered_df),
+                'processed_date': datetime.now().isoformat(),
+                'filters_applied': {
+                    'keywords': keywords,
+                    'date_range': {
+                        'start': start_date,
+                        'end': end_date
                     }
-                },
-                'posts': filtered_df.to_dict('records')
-            }
+                }
+            },
+            'posts': filtered_df.to_dict('records')
+        }
 
+        try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(result, f, ensure_ascii=False, indent=4)
-            return result
-        return None
+            print(f"Successfully processed and saved results to {output_file}")
+        except Exception as e:
+            print(f"Error saving processed results: {str(e)}")
+            
+        return result

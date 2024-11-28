@@ -362,103 +362,93 @@ class ThreadsScraper:
     def scroll_and_collect_content(self, content_type='posts'):
         """Scroll and collect content with progress tracking"""
         print(f"Starting to collect {content_type}...")
-        collected_usernames = set() 
-        same_content_iterations = 0
-        max_same_iterations = 3
+        previous_content_count = 0
+        same_count_iterations = 0
+        max_same_count = 3
         collected_content = {}
-        scroll_increment = 1000
+        content_index = 1
 
+        
         while True:
             if content_type == 'followers' or content_type == 'following':
                 try:
+                    # Find the main dialog container
                     dialog = self.driver.find_element("css selector", "div[role='dialog']")
                     if dialog:
+                        # Find the scrollable container using the class from your HTML
                         scrollable_div = dialog.find_element("css selector", "div.xb57i2i")
-                        current_scroll = self.driver.execute_script("return arguments[0].scrollTop;", scrollable_div)
-                        self.driver.execute_script(f"""
-                            arguments[0].scrollTo({{
-                                top: {current_scroll + scroll_increment},
-                                behavior: 'instant'
-                            }});
+                        
+                        # Scroll down the container
+                        self.driver.execute_script("""
+                            arguments[0].scrollTo({
+                                top: arguments[0].scrollHeight
+                            });
                         """, scrollable_div)
-
                 except Exception as e:
                     print(f"Scrolling error: {e}")
                     break
             else:
-                self.driver.execute_script("""
-                    window.scrollTo({
-                        top: window.pageYOffset + 1000,
-                        behavior: 'instant'
-                    });
-                """)
+                # Original scrolling for other content types
+                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
-            # Wait a short time for any new content to be added to the DOM
-            time.sleep(0.5)
-            
+                
+            time.sleep(1)
+
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+            #Need to change from class names
             
-            # Track current batch of usernames
-            current_batch_usernames = set()
-            
-            if content_type in ['followers', 'following']:
-                elements = soup.find_all('div', class_='x78zum5 xdt5ytf x5kalc8 xl56j7k xeuugli x1sxyh0')
-                
-                for element in elements:
-                    username_element = element.find('a')
-                    if username_element and 'href' in username_element.attrs:
-                        username = username_element['href'].replace('/@', '')
-                        
-                        # Only process if this is a new username
-                        if username not in collected_usernames:
-                            follower_data = self.extract_follower_data(element)
-                            if follower_data:
-                                collected_content[f"{content_type[:-1]} {len(collected_usernames) + 1}"] = follower_data
-                                collected_usernames.add(username)
-                        
-                        current_batch_usernames.add(username)
-            else:
-                # Handle other content types as before...
+            if content_type == 'posts':
                 elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
-                
-                # Process new content only
-                if str(element) not in previous_content:
-                    if content_type == 'posts':
-                        post_data = self.extract_post_data(element)
-                        if post_data:
-                            collected_content[f"post {content_index}"] = post_data
-                            content_index += 1
-                    elif content_type == 'replies':
-                        reply_data = self.extract_reply_data(element)
-                        if reply_data:
-                            collected_content[f"reply {content_index}"] = reply_data
-                            content_index += 1
-                    elif content_type == 'reposts':
-                        repost_data = self.extract_repost_data(element)
-                        if repost_data:
-                            collected_content[f"repost {content_index}"] = repost_data
-                            content_index += 1
-                    elif content_type == 'followers':
-                        follower_data = self.extract_follower_data(element)
-                        if follower_data:
-                            collected_content[f"follower {content_index}"] = follower_data
-                            content_index += 1
-                    elif content_type == 'following':
-                        following_data = self.extract_follower_data(element)
-                        if following_data:
-                            collected_content[f"following {content_index}"] = following_data
-                            content_index += 1
+                for element in elements[len(collected_content):]:
+                    post_data = self.extract_post_data(element)
+                    if post_data:
+                        collected_content[f"post {content_index}"] = post_data
+                        content_index += 1
 
-            print(f"Found {len(collected_usernames)} {content_type} so far...")
+            elif content_type == 'replies':
+                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
+                for element in elements[len(collected_content):]:
+                    reply_data = self.extract_reply_data(element)
+                    if reply_data:
+                        collected_content[f"reply {content_index}"] = reply_data
+                        content_index += 1
 
-            # Check if we've found any new content in this batch
-            if not current_batch_usernames - collected_usernames:
-                same_content_iterations += 1
-                if same_content_iterations >= max_same_iterations:
-                    print(f"No new {content_type} found after {max_same_iterations} attempts. Stopping.")
+            elif content_type == 'reposts':
+                elements = soup.find_all('div', class_='x78zum5 xdt5ytf')
+                for element in elements[len(collected_content):]:
+                    repost_data = self.extract_repost_data(element)
+                    if repost_data:
+                        collected_content[f"repost {content_index}"] = repost_data
+                        content_index += 1
+
+            elif content_type == 'followers':
+                elements = soup.find_all('div', class_='x78zum5 xdt5ytf x5kalc8 xl56j7k xeuugli x1sxyh0')
+                for element in elements[len(collected_content):]:
+                    follower_data = self.extract_follower_data(element)
+                    if follower_data:
+                        collected_content[f"follower {content_index}"] = follower_data
+                        content_index += 1
+
+            elif content_type == 'following':
+                elements = soup.find_all('div', class_='x78zum5 xdt5ytf x5kalc8 xl56j7k xeuugli x1sxyh0')
+                for element in elements[len(collected_content):]:
+                    following_data = self.extract_follower_data(element)
+                    if following_data:
+                        collected_content[f"following {content_index}"] = following_data
+                        content_index += 1
+
+            current_content_count = len(elements)
+            print(f"Found {len(collected_content)} {content_type} so far...")
+
+            if current_content_count == previous_content_count:
+                same_count_iterations += 1
+                if same_count_iterations >= max_same_count:
                     break
             else:
-                same_content_iterations = 0
+                same_count_iterations = 0
+
+            previous_content_count = current_content_count
+            time.sleep(1)
 
         return collected_content
 
