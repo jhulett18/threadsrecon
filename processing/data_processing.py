@@ -20,34 +20,67 @@ class DataProcessor:
 
     def add_mutual_follower_status(self):
         """Add is_mutual field to followers/following data"""
-        for username, profile_data in self.data.items():
+        for username, outer_profile in self.data.items():
+            # Handle the double nesting
+            profile_data = outer_profile.get(username, {})
+            
             if isinstance(profile_data, dict):
                 followers = profile_data.get('followers', {})
                 following = profile_data.get('following', {})
                 
-                # Convert to sets of usernames for efficient comparison
-                follower_usernames = set(followers.keys()) if isinstance(followers, dict) else set()
-                following_usernames = set(following.keys()) if isinstance(following, dict) else set()
+                # Extract actual usernames from the nested structure
+                follower_usernames = {v['username'] for k, v in followers.items() if isinstance(v, dict) and 'username' in v}
+                following_usernames = {v['username'] for k, v in following.items() if isinstance(v, dict) and 'username' in v}
                 
                 # Update followers with mutual status
-                for follower_username, follower_data in followers.items():
-                    is_mutual = follower_username in following_usernames
-                    if isinstance(follower_data, dict):
+                for _, follower_data in followers.items():
+                    if isinstance(follower_data, dict) and 'username' in follower_data:
+                        is_mutual = follower_data['username'] in following_usernames
                         follower_data['is_mutual'] = is_mutual
-                    else:
-                        followers[follower_username] = {'is_mutual': is_mutual}
                 
                 # Update following with mutual status
-                for following_username, following_data in following.items():
-                    is_mutual = following_username in follower_usernames
-                    if isinstance(following_data, dict):
+                for _, following_data in following.items():
+                    if isinstance(following_data, dict) and 'username' in following_data:
+                        is_mutual = following_data['username'] in follower_usernames
                         following_data['is_mutual'] = is_mutual
-                    else:
-                        following[following_username] = {'is_mutual': is_mutual}
 
                 # Update the profile data
                 profile_data['followers'] = followers
                 profile_data['following'] = following
+                outer_profile[username] = profile_data
+
+    def get_mutual_stats(self, username):
+        """Get mutual follower statistics for a profile"""
+        outer_profile = self.data.get(username, {})
+        profile_data = outer_profile.get(username, {})
+        
+        followers = profile_data.get('followers', {})
+        following = profile_data.get('following', {})
+        
+        # Get mutual followers with their usernames
+        mutual_followers_list = [
+            follower['username']
+            for follower in followers.values()
+            if isinstance(follower, dict) 
+            and 'username' in follower 
+            and any(
+                following_user['username'] == follower['username']
+                for following_user in following.values()
+                if isinstance(following_user, dict) and 'username' in following_user
+            )
+        ]
+        
+        mutual_count = len(mutual_followers_list)
+        total_followers = len(followers)
+        total_following = len(following)
+        
+        return {
+            'mutual_followers': mutual_count,
+            'total_followers': total_followers,
+            'total_following': total_following,
+            'mutual_percentage': round((mutual_count / total_followers * 100) if total_followers > 0 else 0, 2),
+            'mutual_follower_usernames': mutual_followers_list  # Added this line
+        }
 
     def filter_by_date(self, df, start_date=None, end_date=None):
         """Filter DataFrame by date range"""
@@ -68,20 +101,53 @@ class DataProcessor:
         return df[df['text'].str.contains(pattern, case=False, na=False)]
 
     def archive_profiles(self, output_file):
-        """Archive raw profile data with metadata"""
-        archive = {
+        """Archive raw profile data with metadata by updating existing archive"""
+        # First try to load existing archive
+        existing_archive = {}
+        try:
+            with open(output_file, 'r', encoding='utf-8') as f:
+                existing_archive = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            # If file doesn't exist or is invalid JSON, start with empty archive
+            pass
+
+        # Create new archive data
+        new_archive = {
             'metadata': {
-                'archived_date': datetime.now().isoformat(),
+                'last_updated': datetime.now().isoformat(),
                 'total_profiles': len(self.data),
                 'profile_usernames': list(self.data.keys())
             },
             'profiles': self.data
         }
-        
+
+        # If there's existing data, merge it
+        if existing_archive:
+            # Update existing profiles
+            if 'profiles' in existing_archive:
+                for username, profile_data in new_archive['profiles'].items():
+                    existing_archive['profiles'][username] = profile_data
+            else:
+                existing_archive['profiles'] = new_archive['profiles']
+
+            # Update metadata
+            if 'metadata' in existing_archive:
+                existing_archive['metadata'].update(new_archive['metadata'])
+                # Keep track of first archived date if it exists
+                if 'first_archived' in existing_archive['metadata']:
+                    existing_archive['metadata']['last_updated'] = new_archive['metadata']['last_updated']
+                else:
+                    existing_archive['metadata']['first_archived'] = new_archive['metadata']['last_updated']
+            else:
+                existing_archive['metadata'] = new_archive['metadata']
+                existing_archive['metadata']['first_archived'] = new_archive['metadata']['last_updated']
+
+            new_archive = existing_archive
+
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(archive, f, ensure_ascii=False, indent=4)
-            print(f"Successfully archived profiles to {output_file}")
+                json.dump(new_archive, f, ensure_ascii=False, indent=4)
+            print(f"Successfully updated archive in {output_file}")
         except Exception as e:
             print(f"Error archiving profiles: {str(e)}")
 
@@ -91,10 +157,15 @@ class DataProcessor:
         empty_df = pd.DataFrame(columns=['username', 'text', 'date_posted', 'likes', 'replies'])
         
         all_posts_data = []
+        profile_stats = {}
         
         # Process each profile
         for username, profile_data in self.data.items():
             if isinstance(profile_data, dict):
+                # Get mutual follower stats
+                profile_stats[username] = self.get_mutual_stats(username)
+                
+                # Process posts
                 posts = profile_data.get('posts', [])
                 if posts:
                     posts_df = process_posts(posts)
@@ -104,11 +175,11 @@ class DataProcessor:
         # Combine all posts or use empty DataFrame if no posts
         combined_df = pd.concat(all_posts_data, ignore_index=True) if all_posts_data else empty_df
         
-        # Apply filters (will work on empty DataFrame)
+        # Apply filters
         filtered_df = self.filter_by_date(combined_df, start_date, end_date)
         filtered_df = self.filter_by_keywords(filtered_df, keywords)
         
-        # Archive raw profiles
+        # Archive raw profiles (now updates instead of replaces)
         self.archive_profiles(archive_file)
 
         # Create result dictionary
@@ -124,8 +195,43 @@ class DataProcessor:
                     }
                 }
             },
+            'profile_stats': profile_stats,
             'posts': filtered_df.to_dict('records')
         }
+
+        # Try to load existing output file
+        try:
+            with open(output_file, 'r', encoding='utf-8') as f:
+                existing_result = json.load(f)
+                # Update existing result with new data
+                if isinstance(existing_result, dict):
+                    # Merge posts
+                    if 'posts' in existing_result:
+                        existing_posts = existing_result['posts']
+                        new_posts = result['posts']
+                        # Create a set of existing post IDs or some unique identifier
+                        existing_ids = {(post.get('username'), post.get('date_posted')) 
+                                    for post in existing_posts}
+                        # Only add posts that don't already exist
+                        for post in new_posts:
+                            if (post.get('username'), post.get('date_posted')) not in existing_ids:
+                                existing_posts.append(post)
+                        result['posts'] = existing_posts
+
+                    # Update profile stats
+                    if 'profile_stats' in existing_result:
+                        existing_result['profile_stats'].update(result['profile_stats'])
+                        result['profile_stats'] = existing_result['profile_stats']
+
+                    # Update metadata
+                    result['metadata']['last_updated'] = datetime.now().isoformat()
+                    if 'metadata' in existing_result and 'first_processed' in existing_result['metadata']:
+                        result['metadata']['first_processed'] = existing_result['metadata']['first_processed']
+                    else:
+                        result['metadata']['first_processed'] = result['metadata']['processed_date']
+        except (FileNotFoundError, json.JSONDecodeError):
+            # If file doesn't exist or is invalid JSON, use new result as is
+            result['metadata']['first_processed'] = result['metadata']['processed_date']
 
         try:
             with open(output_file, 'w', encoding='utf-8') as f:

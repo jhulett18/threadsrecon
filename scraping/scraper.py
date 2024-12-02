@@ -314,7 +314,6 @@ class ThreadsScraper:
             username = link['href'].strip('/@')
             
             # Find the display name by looking for the last span with dir="auto"
-            # that contains text within the link's parent structure
             spans = follower_element.find_all('span', attrs={'dir': 'auto'})
             name = None
             for span in spans:

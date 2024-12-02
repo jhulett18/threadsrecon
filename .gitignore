@@ -10,6 +10,7 @@ data/profiles.json
 data/archived_profiles.json
 data/analyzed_profiles.json
 
+chromedriver.exe
 chromedriver
 
 settings.ini
