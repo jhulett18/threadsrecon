@@ -23,7 +23,7 @@ class ThreadsScraper:
     def __init__(self, base_url, chromedriver):
         self.base_url = base_url
         self.chrome_options = Options()
-        #self.chrome_options.add_argument('--headless=new')
+        self.chrome_options.add_argument('--headless=new')
 
         # Optimize performance
         self.chrome_options.add_argument('--disable-gpu')
@@ -419,7 +419,8 @@ class ThreadsScraper:
                     if repost_data:
                         collected_content[f"repost {content_index}"] = repost_data
                         content_index += 1
-
+                        
+            #May not find all followers
             elif content_type == 'followers':
                 elements = soup.find_all('div', class_='x78zum5 xdt5ytf x5kalc8 xl56j7k xeuugli x1sxyh0')
                 for element in elements[len(collected_content):]:
@@ -572,7 +573,7 @@ class ThreadsScraper:
             profile_data['followers_count'] = "Followers not found"
 
             
-        '''
+        
         # Collect posts
         print("Collecting posts...")
         posts = self.scroll_and_collect_content('posts')
@@ -595,6 +596,6 @@ class ThreadsScraper:
         reposts = self.scroll_and_collect_content('reposts')
         profile_data["reposts"] = reposts
         profile_data["reposts_count"] = len(reposts)
-        '''
+        
         
         return {username: profile_data}

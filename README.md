@@ -38,8 +38,8 @@ AnalysisSettings:
   - keyword1
   - keyword2
  date_range: 
-  start: "2023-01-01"
-  end: "2024-01-01"
+  start: null  # or "2024-01-01"
+  end: null    # or "2024-12-31"
 ```
 
 ## Running

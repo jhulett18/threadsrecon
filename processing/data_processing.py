@@ -153,36 +153,34 @@ class DataProcessor:
 
     def process_and_archive(self, output_file, archive_file, keywords=None, start_date=None, end_date=None):
         """Process, filter and archive data"""
-        # Create empty DataFrame with required columns
         empty_df = pd.DataFrame(columns=['username', 'text', 'date_posted', 'likes', 'replies'])
         
         all_posts_data = []
         profile_stats = {}
         
-        # Process each profile
-        for username, profile_data in self.data.items():
-            if isinstance(profile_data, dict):
-                # Get mutual follower stats
+        for username, outer_profile in self.data.items():
+            if isinstance(outer_profile, dict):
+                inner_profile = outer_profile.get(username, {})
                 profile_stats[username] = self.get_mutual_stats(username)
                 
-                # Process posts
-                posts = profile_data.get('posts', [])
+                posts = inner_profile.get('posts', {})
                 if posts:
                     posts_df = process_posts(posts)
                     posts_df['username'] = username
                     all_posts_data.append(posts_df)
         
-        # Combine all posts or use empty DataFrame if no posts
         combined_df = pd.concat(all_posts_data, ignore_index=True) if all_posts_data else empty_df
-        
-        # Apply filters
         filtered_df = self.filter_by_date(combined_df, start_date, end_date)
         filtered_df = self.filter_by_keywords(filtered_df, keywords)
         
-        # Archive raw profiles (now updates instead of replaces)
         self.archive_profiles(archive_file)
 
-        # Create result dictionary
+        # Convert timestamps to strings before JSON serialization
+        posts_dict = filtered_df.to_dict('records')
+        for post in posts_dict:
+            if isinstance(post.get('date_posted'), pd.Timestamp):
+                post['date_posted'] = post['date_posted'].isoformat()
+
         result = {
             'metadata': {
                 'total_posts': len(filtered_df),
@@ -196,9 +194,8 @@ class DataProcessor:
                 }
             },
             'profile_stats': profile_stats,
-            'posts': filtered_df.to_dict('records')
+            'posts': posts_dict
         }
-
         # Try to load existing output file
         try:
             with open(output_file, 'r', encoding='utf-8') as f:
