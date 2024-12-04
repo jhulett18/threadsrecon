@@ -34,6 +34,8 @@ AnalysisSettings:
  input_file: data/profiles.json
  archive_file: data/archived_profiles.json
  output_file: data/analyzed_profiles.json
+ hashtag_network_static: data/hashtag_network_static.png
+ hastag_network_interactive: data/hashtag_network_interactive.html 
  keywords: 
   - keyword1
   - keyword2

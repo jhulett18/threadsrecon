@@ -367,7 +367,7 @@ class ThreadsScraper:
         collected_content = {}
         content_index = 1
 
-        
+        # Need to optimize somehow
         while True:
             if content_type == 'followers' or content_type == 'following':
                 try:

@@ -109,5 +109,23 @@ def main():
     else:
         print("No data to process.")
 
+    '''
+    HASHTAG NETWORK VISUALIZATION
+    '''
+    
+    network_analysis = processor.analyze_hashtag_network()
+    # Save static visualization
+    if network_analysis['static']:
+        network_analysis['static'].savefig(config["AnalysisSettings"]["hashtag_network_static"],)
+
+    # Save interactive visualization
+    if network_analysis['interactive']:
+        network_analysis['interactive'].write_html(config["AnalysisSettings"]["hastag_network_interactive"],)
+
+    # Print strongest connections
+    print("\nStrongest hashtag connections:")
+    for (tag1, tag2), weight in network_analysis['strongest_connections']:
+        print(f"#{tag1} - #{tag2}: {weight} co-occurrences")
+        
 if __name__ == "__main__":
     main()

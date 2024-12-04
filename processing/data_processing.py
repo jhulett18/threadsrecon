@@ -1,7 +1,8 @@
 import json
 from datetime import datetime
 import pandas as pd
-from analysis.sentiment_analysis import process_posts 
+from analysis.sentiment_analysis import process_posts
+from visualization.visualization import HashtagNetworkAnalyzer 
 
 class DataProcessor:
     def __init__(self, input_file):
@@ -93,6 +94,40 @@ class DataProcessor:
             'avg_hashtags_per_post': combined_df['hashtag_count'].mean()
         }
         
+    def analyze_hashtag_network(self):
+        """Analyze and visualize hashtag network"""
+        # Collect all posts
+        all_posts_data = []
+        for username, outer_profile in self.data.items():
+            if isinstance(outer_profile, dict):
+                inner_profile = outer_profile.get(username, {})
+                posts = inner_profile.get('posts', {})
+                if posts:
+                    posts_df = process_posts(posts)
+                    posts_df['username'] = username
+                    all_posts_data.append(posts_df)
+        
+        combined_df = pd.concat(all_posts_data, ignore_index=True) if all_posts_data else pd.DataFrame()
+        
+        if combined_df.empty:
+            return None
+            
+        analyzer = HashtagNetworkAnalyzer(combined_df)
+        
+        # Create both visualizations
+        static_fig = analyzer.plot_matplotlib()
+        interactive_fig = analyzer.plot_plotly()
+        
+        return {
+            'static': static_fig,
+            'interactive': interactive_fig,
+            'total_connections': len(analyzer.edge_weights),
+            'strongest_connections': sorted(
+                [(tags, weight) for tags, weight in analyzer.edge_weights.items()],
+                key=lambda x: x[1],
+                reverse=True
+            )[:10]
+        }
     def get_mutual_stats(self, username):
         """Get mutual follower statistics for a profile"""
         outer_profile = self.data.get(username, {})
