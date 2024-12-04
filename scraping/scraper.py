@@ -391,7 +391,7 @@ class ThreadsScraper:
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
                 
-            time.sleep(1)
+            time.sleep(2)
 
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')
             #Need to change from class names

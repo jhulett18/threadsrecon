@@ -4,7 +4,7 @@ import pandas as pd
 from textblob import TextBlob
 from datetime import datetime
 import json
-
+import re
 def analyze_sentiment(text):
     """Analyze sentiment of text using TextBlob"""
     try:
@@ -15,7 +15,13 @@ def analyze_sentiment(text):
         }
     except:
         return {'polarity': 0, 'subjectivity': 0}
-    
+
+def extract_hashtags(text):
+    """Extract hashtags from text"""
+    # Find all instances of # followed by word characters
+    hashtags = re.findall(r'#(\w+)', str(text))
+    return hashtags
+
 def process_posts(posts_data):
     """Process posts into a pandas DataFrame with sentiment analysis"""
     processed_posts = []
@@ -43,7 +49,8 @@ def process_posts(posts_data):
 
             # Get sentiment
             sentiment = analyze_sentiment(post.get('text', ''))
-            
+            hashtags = extract_hashtags(post.get('text', ''))
+
             processed_posts.append({
                 'post_id': post_key,
                 'text': post.get('text', ''),
@@ -52,7 +59,9 @@ def process_posts(posts_data):
                 'replies': metrics.get('replies', 0),
                 'reposts': metrics.get('reposts', 0),
                 'polarity': sentiment['polarity'],
-                'subjectivity': sentiment['subjectivity']
+                'subjectivity': sentiment['subjectivity'],
+                'hashtags': hashtags, 
+                'hashtag_count': len(hashtags) 
             })
             
         except Exception as e:
