@@ -3,6 +3,9 @@
 
 import os
 import sys
+import yaml
+import json
+import argparse
 from scraping.scraper import ThreadsScraper
 from analysis.sentiment_analysis import analyze_sentiment, process_posts
 from processing.data_processing import DataProcessor
@@ -10,28 +13,12 @@ from processing.data_processing import DataProcessor
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
-# Check for required Python version
-if sys.version_info < (3, 6):
-    print("Python 3.6 or higher is required. Please upgrade your Python version.")
-    sys.exit(1)
-
-
-def main():
-    '''
-    Scraping and adding to JSON
-    '''
-
-    # Check for 'data' folder
-    if not os.path.exists("data"):
-        print("Creating 'data' folder...")
-        os.makedirs("data")
-
-    # Check for settings.yaml
-    if not os.path.exists("settings.yaml"):
-        print("Configuration file 'settings.yaml' is missing. Exiting...")
+def check_requirements():
+    """Check Python version and required dependencies"""
+    if sys.version_info < (3, 6):
+        print("Python 3.6 or higher is required. Please upgrade your Python version.")
         sys.exit(1)
 
-    # Notify about missing dependencies
     try:
         import yaml
         import json
@@ -39,44 +26,49 @@ def main():
         print("Required libraries are missing. Run: python3 -m pip install -r requirements.txt")
         sys.exit(1)
 
-    # Load configuration
+def load_config():
+    """Load and validate configuration from settings.yaml"""
+    if not os.path.exists("settings.yaml"):
+        print("Configuration file 'settings.yaml' is missing. Exiting...")
+        sys.exit(1)
+
     with open("settings.yaml", "r") as file:
         config = yaml.safe_load(file)
 
-    # Retrieve configuration values
-    try:
-        base_url = config["ScraperSettings"]["base_url"]
-        usernames = config["ScraperSettings"]["usernames"]
-        chromedriver = config["ScraperSettings"]["chromedriver"]
-        instagram_username = config["Credentials"]["instagram_username"]
-        instagram_password = config["Credentials"]["instagram_password"]
-    except KeyError as e:
-        missing_key = str(e).strip("'")
-        if "Credentials" in missing_key:
-            print("Missing credentials key in settings.yaml. Anonymous scraping will be implemented.")
-            instagram_username = None
-            instagram_password = None
-        else:
-            print(f"Missing configuration key: {missing_key}. Check your settings.yaml file.")
-            sys.exit(1)
+    return config
 
-    # Ensure chromedriver exists
+def setup_environment(config):
+    """Set up necessary folders and validate paths"""
+    if not os.path.exists("data"):
+        print("Creating 'data' folder...")
+        os.makedirs("data")
+
+    chromedriver = config["ScraperSettings"]["chromedriver"]
     if not os.path.exists(chromedriver):
         print(f"Chromedriver not found at path: {chromedriver}. Exiting...")
         sys.exit(1)
 
+def scrape_data(config):
+    """Handle the scraping functionality"""
+    try:
+        base_url = config["ScraperSettings"]["base_url"]
+        usernames = config["ScraperSettings"]["usernames"]
+        chromedriver = config["ScraperSettings"]["chromedriver"]
+        instagram_username = config["Credentials"].get("instagram_username")
+        instagram_password = config["Credentials"].get("instagram_password")
+    except KeyError as e:
+        missing_key = str(e).strip("'")
+        print(f"Missing configuration key: {missing_key}. Check your settings.yaml file.")
+        sys.exit(1)
+
     scraper = ThreadsScraper(base_url, chromedriver)
-
-    # Login
-    if not scraper.login(instagram_username, instagram_password):
-        print("Failed to login. Exiting...")
-        scraper.driver.quit()
-        return
-
     all_profiles_data = {}
 
-    # Fetch profile data
     try:
+        if not scraper.login(instagram_username, instagram_password):
+            print("Failed to login. Exiting...")
+            return
+
         for username in usernames:
             profile_data = scraper.fetch_profile(username)
             if profile_data:
@@ -85,16 +77,13 @@ def main():
             else:
                 print(f"No data retrieved for {username}.")
 
-        # Write data to JSON file
         with open("data/profiles.json", "w") as json_file:
             json.dump(all_profiles_data, json_file, indent=4)
     finally:
         scraper.driver.quit()
 
-    '''
-    ANALYSIS
-    '''
-
+def analyze_data(config):
+    """Handle the analysis functionality"""
     processor = DataProcessor(config["AnalysisSettings"]["input_file"])
     result = processor.process_and_archive(
         config["AnalysisSettings"]["output_file"],
@@ -109,23 +98,49 @@ def main():
     else:
         print("No data to process.")
 
-    '''
-    HASHTAG NETWORK VISUALIZATION
-    '''
-    
+def visualize_network(config):
+    """Handle the hashtag network visualization"""
+    processor = DataProcessor(config["AnalysisSettings"]["input_file"])
     network_analysis = processor.analyze_hashtag_network()
-    # Save static visualization
+    
     if network_analysis['static']:
-        network_analysis['static'].savefig(config["AnalysisSettings"]["hashtag_network_static"],)
+        network_analysis['static'].savefig(
+            config["AnalysisSettings"]["hashtag_network_static"]
+        )
 
-    # Save interactive visualization
     if network_analysis['interactive']:
-        network_analysis['interactive'].write_html(config["AnalysisSettings"]["hastag_network_interactive"],)
+        network_analysis['interactive'].write_html(
+            config["AnalysisSettings"]["hashtag_network_interactive"]
+        )
 
-    # Print strongest connections
     print("\nStrongest hashtag connections:")
     for (tag1, tag2), weight in network_analysis['strongest_connections']:
         print(f"#{tag1} - #{tag2}: {weight} co-occurrences")
-        
+
+def main():
+    parser = argparse.ArgumentParser(description='Threads Data Analysis Tool')
+    parser.add_argument('command', choices=['scrape', 'analyze', 'visualize', 'all'],
+                      help='Command to execute: scrape, analyze, visualize, or all')
+    
+    args = parser.parse_args()
+    
+    # Initial setup
+    check_requirements()
+    config = load_config()
+    setup_environment(config)
+    
+    # Execute requested command
+    if args.command == 'scrape' or args.command == 'all':
+        print("Starting data scraping...")
+        scrape_data(config)
+    
+    if args.command == 'analyze' or args.command == 'all':
+        print("Starting data analysis...")
+        analyze_data(config)
+    
+    if args.command == 'visualize' or args.command == 'all':
+        print("Generating network visualization...")
+        visualize_network(config)
+
 if __name__ == "__main__":
     main()
