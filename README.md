@@ -46,5 +46,8 @@ AnalysisSettings:
 
 ## Running
 ```bash
-python3 main.py
+python main.py all 
+python main.py scrape 
+python main.py analyze 
+python main.py visualize 
 ```

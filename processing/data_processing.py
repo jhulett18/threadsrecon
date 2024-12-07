@@ -129,12 +129,15 @@ class DataProcessor:
             )[:10]
         }
     def get_mutual_stats(self, username):
-        """Get mutual follower statistics for a profile"""
         outer_profile = self.data.get(username, {})
         profile_data = outer_profile.get(username, {})
         
         followers = profile_data.get('followers', {})
         following = profile_data.get('following', {})
+        
+        # Calculate actual counts based on collected data
+        total_followers = len(followers)
+        total_following = len(following)
         
         # Get mutual followers with their usernames
         mutual_followers_list = [
@@ -150,15 +153,13 @@ class DataProcessor:
         ]
         
         mutual_count = len(mutual_followers_list)
-        total_followers = len(followers)
-        total_following = len(following)
         
         return {
             'mutual_followers': mutual_count,
             'total_followers': total_followers,
             'total_following': total_following,
             'mutual_percentage': round((mutual_count / total_followers * 100) if total_followers > 0 else 0, 2),
-            'mutual_follower_usernames': mutual_followers_list  # Added this line
+            'mutual_follower_usernames': mutual_followers_list
         }
 
     def filter_by_date(self, df, start_date=None, end_date=None):

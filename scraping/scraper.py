@@ -375,7 +375,7 @@ class ThreadsScraper:
                     dialog = self.driver.find_element("css selector", "div[role='dialog']")
                     if dialog:
                         # Find the scrollable container using the class from your HTML
-                        scrollable_div = dialog.find_element("css selector", "div.xb57i2i")
+                        scrollable_div = dialog.find_element("xpath", ".//div[starts-with(@class, 'xb57i2i')]")
                         
                         # Scroll down the container
                         self.driver.execute_script("""
@@ -527,33 +527,59 @@ class ThreadsScraper:
             profile_data['instagram'] = "Instagram link not found"
 
         #Collect followers
-        followers_count = self.driver.find_element(By.XPATH, '//span[@dir="auto"][contains(text(), " followers")]')
-        if followers_count:
-            profile_data['followers_count'] = followers_count.text.strip().replace('followers', '').strip()
+        try:
+            # First try to get the count from the profile page
+            followers_count_elem = self.driver.find_element(By.XPATH, '//span[@dir="auto"][contains(text(), " followers")]')
+            displayed_followers_count = followers_count_elem.text.strip().replace('followers', '').strip()
             
             # Click to open followers window
-            followers_count.click()
-            
-            # Wait a moment for the window to fully open
+            followers_count_elem.click()
             time.sleep(2)
-            actions = ActionChains(self.driver)
-
+            
+            # Collect followers data
             followers = self.scroll_and_collect_content('followers')
-            profile_data["followers"] = followers
+            actual_followers_count = len(followers)
+            
+            # Use the actual count from collected data
+            profile_data['followers_count'] = str(actual_followers_count)
+            profile_data['followers'] = followers
+            
+            # Log if there's a discrepancy
+            if actual_followers_count != int(displayed_followers_count.replace(',', '')):
+                print(f"Warning: Followers count mismatch - Display: {displayed_followers_count}, Actual: {actual_followers_count}")
 
             #Collect following
-            following_container = self.driver.find_element(By.XPATH,'//span[@dir="auto"][contains(text(), "Following")]')
-            following_count = self.driver.find_element(By.XPATH, '//div[@aria-label="Following"]//span[@title]').get_attribute('title')
-            profile_data['following_count'] = following_count
-
-            following_container.click()
-            following = self.scroll_and_collect_content('following')
-            profile_data["following"] = following
-
+            try:
+                # First try to get the count from the profile page
+                following_container = self.driver.find_element(By.XPATH,'//span[@dir="auto"][contains(text(), "Following")]')
+                following_count_elem = self.driver.find_element(By.XPATH, '//div[@aria-label="Following"]//span[@title]')
+                displayed_following_count = following_count_elem.get_attribute('title')
+                
+                # Click to open following window
+                following_container.click()
+                time.sleep(2)
+                
+                # Collect following data
+                following = self.scroll_and_collect_content('following')
+                actual_following_count = len(following)
+                
+                # Use the actual count from collected data
+                profile_data['following_count'] = str(actual_following_count)
+                profile_data['following'] = following
+                
+                # Log if there's a discrepancy
+                if actual_following_count != int(displayed_following_count.replace(',', '')):
+                    print(f"Warning: Following count mismatch - Display: {displayed_following_count}, Actual: {actual_following_count}")
+                
+            except Exception as e:
+                print(f"Error collecting following data: {str(e)}")
+                profile_data['following_count'] = "Following count not found"
+                profile_data['following'] = {}
 
             # Try multiple methods to close the window
             try:
                 # Method 1: ActionChains
+                actions = ActionChains(self.driver)
                 actions.send_keys(Keys.ESCAPE).perform()
                 time.sleep(1) 
                 
@@ -568,9 +594,12 @@ class ThreadsScraper:
                     close_button.click()
                     
             except Exception as e:
-                print(f"Error closing followers window: {e}")
-        else:
+                print(f"Error closing window: {e}")
+
+        except Exception as e:
+            print(f"Error collecting followers data: {str(e)}")
             profile_data['followers_count'] = "Followers not found"
+            profile_data['followers'] = {}
 
             
         
