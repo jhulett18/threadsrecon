@@ -10,7 +10,6 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.sentiment import SentimentIntensityAnalyzer
 from collections import Counter
-import emoji
 
 # Download necessary NLTK resources
 nltk.download('punkt')
