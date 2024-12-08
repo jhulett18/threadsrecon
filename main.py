@@ -7,7 +7,7 @@ import yaml
 import json
 import argparse
 from scraping.scraper import ThreadsScraper
-from analysis.sentiment_analysis import analyze_sentiment, process_posts
+from analysis.sentiment_analysis import analyze_sentiment_nltk, process_posts
 from processing.data_processing import DataProcessor
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
