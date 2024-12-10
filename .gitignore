@@ -5,6 +5,7 @@ processing/__pycache__/
 reports/__pycache__/
 scraping/__pycache__/
 visualization/__pycache__/
+warningsys/__pycache__/
 
 data/profiles.json
 data/archived_profiles.json

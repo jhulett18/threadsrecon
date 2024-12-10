@@ -3,6 +3,7 @@ OSINT Tool for threads.net
 
 ## Requirements
 - Google Chrome/Chromium with appropriate chromedriver version
+- Telegram bot
 
 ## Installation
 ### Generic
@@ -16,6 +17,7 @@ xattr -d com.apple.quarantine /opt/homebrew/bin/chromedriver
 ```bash
 python3 -m pip install -r requirements.txt
 ```
+- Crate your [Telegram bot](https://core.telegram.org/bots/tutorial) and obtain your bot token and chat ID.
 - Create `settings.yaml` file.
 - Example configuration:
 ```bash
@@ -42,6 +44,23 @@ AnalysisSettings:
  date_range: 
   start: null  # or "2024-01-01"
   end: null    # or "2024-12-31"
+
+WarningSystem:
+  token: your_telegram_bot_token
+  chat_id: your_chat_id
+  priority_keywords:
+    HIGH:
+      - "urgent"
+      - "emergency"
+      - "critical"
+    MEDIUM:
+      - "important"
+      - "attention"
+      - "warning"
+    LOW:
+      - "update"
+      - "info"
+      - "notice"
 ```
 
 ## Running

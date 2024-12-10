@@ -1,14 +1,21 @@
 import json
 from datetime import datetime
 import pandas as pd
+import asyncio
 from analysis.sentiment_analysis import process_posts
 from visualization.visualization import HashtagNetworkAnalyzer 
+from warningsys.warning_system import TelegramAlertSystem, KeywordMonitor
 
 class DataProcessor:
-    def __init__(self, input_file):
+    def __init__(self, input_file, telegram_token=None, chat_id=None, priority_keywords=None):
         self.input_file = input_file
         self.data = self.load_data()
         self.add_mutual_follower_status()
+        
+        # Initialize the warning system if credentials are provided
+        self.keyword_monitor = None
+        if telegram_token and chat_id:
+            self.keyword_monitor = KeywordMonitor(telegram_token, chat_id, priority_keywords)
 
     def load_data(self):
         """Load JSON data from file"""
@@ -231,9 +238,20 @@ class DataProcessor:
         except Exception as e:
             print(f"Error archiving profiles: {str(e)}")
 
-    def process_and_archive(self, output_file, archive_file, keywords=None, start_date=None, end_date=None):
-        """Process, filter and archive data"""
-        empty_df = pd.DataFrame(columns=['username', 'text', 'date_posted', 'likes', 'replies','hashtags','hashtag_count'])
+    async def process_post_with_monitoring(self, post, username):
+        """Process a single post and send alerts if necessary"""
+        if self.keyword_monitor:
+            metadata = {
+                'username': username,
+                'date_posted': post.get('date_posted', '').isoformat() if isinstance(post.get('date_posted'), datetime) else str(post.get('date_posted', '')),
+                'likes': post.get('likes', 0),
+                'replies': post.get('replies', 0)
+            }
+            await self.keyword_monitor.process_text(post.get('text', ''), metadata)
+
+    async def process_and_archive(self, output_file, archive_file, keywords=None, start_date=None, end_date=None):
+        """Process, filter and archive data with warning system integration"""
+        empty_df = pd.DataFrame(columns=['username', 'text', 'date_posted', 'likes', 'replies', 'hashtags', 'hashtag_count'])
         
         all_posts_data = []
         profile_stats = {}
@@ -251,6 +269,11 @@ class DataProcessor:
                     posts_df = process_posts(posts)
                     posts_df['username'] = username
                     all_posts_data.append(posts_df)
+                    
+                    # Process each post for monitoring
+                    if self.keyword_monitor:
+                        for _, post in posts_df.iterrows():
+                            await self.process_post_with_monitoring(post.to_dict(), username)
         
         combined_df = pd.concat(all_posts_data, ignore_index=True) if all_posts_data else empty_df
         filtered_df = self.filter_by_date(combined_df, start_date, end_date)
@@ -279,40 +302,8 @@ class DataProcessor:
             'profile_stats': profile_stats,
             'posts': posts_dict
         }
-        # Try to load existing output file
-        try:
-            with open(output_file, 'r', encoding='utf-8') as f:
-                existing_result = json.load(f)
-                # Update existing result with new data
-                if isinstance(existing_result, dict):
-                    # Merge posts
-                    if 'posts' in existing_result:
-                        existing_posts = existing_result['posts']
-                        new_posts = result['posts']
-                        # Create a set of existing post IDs or some unique identifier
-                        existing_ids = {(post.get('username'), post.get('date_posted')) 
-                                    for post in existing_posts}
-                        # Only add posts that don't already exist
-                        for post in new_posts:
-                            if (post.get('username'), post.get('date_posted')) not in existing_ids:
-                                existing_posts.append(post)
-                        result['posts'] = existing_posts
 
-                    # Update profile stats
-                    if 'profile_stats' in existing_result:
-                        existing_result['profile_stats'].update(result['profile_stats'])
-                        result['profile_stats'] = existing_result['profile_stats']
-
-                    # Update metadata
-                    result['metadata']['last_updated'] = datetime.now().isoformat()
-                    if 'metadata' in existing_result and 'first_processed' in existing_result['metadata']:
-                        result['metadata']['first_processed'] = existing_result['metadata']['first_processed']
-                    else:
-                        result['metadata']['first_processed'] = result['metadata']['processed_date']
-        except (FileNotFoundError, json.JSONDecodeError):
-            # If file doesn't exist or is invalid JSON, use new result as is
-            result['metadata']['first_processed'] = result['metadata']['processed_date']
-
+        # Save the results
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(result, f, ensure_ascii=False, indent=4)

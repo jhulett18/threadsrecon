@@ -5,6 +5,7 @@ import os
 import sys
 import yaml
 import json
+import asyncio
 import argparse
 from scraping.scraper import ThreadsScraper
 from analysis.sentiment_analysis import analyze_sentiment_nltk, process_posts
@@ -81,23 +82,6 @@ def scrape_data(config):
             json.dump(all_profiles_data, json_file, indent=4)
     finally:
         scraper.driver.quit()
-
-def analyze_data(config):
-    """Handle the analysis functionality"""
-    processor = DataProcessor(config["AnalysisSettings"]["input_file"])
-    result = processor.process_and_archive(
-        config["AnalysisSettings"]["output_file"],
-        config["AnalysisSettings"]["archive_file"],
-        config["AnalysisSettings"]["keywords"],
-        config["AnalysisSettings"]["date_range"]["start"],
-        config["AnalysisSettings"]["date_range"]["end"]
-    )
-    
-    if result:
-        print(f"Processing complete. Processed {result['metadata']['total_posts']} posts.")
-    else:
-        print("No data to process.")
-
 def visualize_network(config):
     """Handle the hashtag network visualization"""
     processor = DataProcessor(config["AnalysisSettings"]["input_file"])
@@ -116,8 +100,41 @@ def visualize_network(config):
     print("\nStrongest hashtag connections:")
     for (tag1, tag2), weight in network_analysis['strongest_connections']:
         print(f"#{tag1} - #{tag2}: {weight} co-occurrences")
+        
+async def analyze_data(config):
+    """Handle the analysis functionality with warning system integration"""
+    # Get Telegram credentials from config
+    telegram_token = config.get("WarningSystem", {}).get("token")
+    chat_id = config.get("WarningSystem", {}).get("chat_id")
+    priority_keywords = config.get("WarningSystem", {}).get("priority_keywords", {
+        # If "priority_keywords" isn't found, uses the default dictionary provided:
+        'HIGH': ['urgent', 'emergency'],
+        'MEDIUM': ['important', 'attention'],
+        'LOW': ['update', 'info']
+    })
 
-def main():
+    # Initialize DataProcessor with warning system
+    processor = DataProcessor(
+        config["AnalysisSettings"]["input_file"],
+        telegram_token=telegram_token,
+        chat_id=chat_id,
+        priority_keywords=priority_keywords
+    )
+    
+    result = await processor.process_and_archive(
+        config["AnalysisSettings"]["output_file"],
+        config["AnalysisSettings"]["archive_file"],
+        config["AnalysisSettings"]["keywords"],
+        config["AnalysisSettings"]["date_range"]["start"],
+        config["AnalysisSettings"]["date_range"]["end"]
+    )
+    
+    if result:
+        print(f"Processing complete. Processed {result['metadata']['total_posts']} posts.")
+    else:
+        print("No data to process.")
+
+async def main():
     parser = argparse.ArgumentParser(description='Threads Data Analysis Tool')
     parser.add_argument('command', choices=['scrape', 'analyze', 'visualize', 'all'],
                       help='Command to execute: scrape, analyze, visualize, or all')
@@ -136,11 +153,11 @@ def main():
     
     if args.command == 'analyze' or args.command == 'all':
         print("Starting data analysis...")
-        analyze_data(config)
+        await analyze_data(config)
     
     if args.command == 'visualize' or args.command == 'all':
         print("Generating network visualization...")
         visualize_network(config)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
