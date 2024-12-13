@@ -10,6 +10,7 @@ import argparse
 from scraping.scraper import ThreadsScraper
 from analysis.sentiment_analysis import analyze_sentiment_nltk, process_posts
 from processing.data_processing import DataProcessor
+from reports.report_generator import GenerateReport
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
@@ -82,6 +83,7 @@ def scrape_data(config):
             json.dump(all_profiles_data, json_file, indent=4)
     finally:
         scraper.driver.quit()
+        
 def visualize_network(config):
     """Handle the hashtag network visualization"""
     processor = DataProcessor(config["AnalysisSettings"]["input_file"])
@@ -101,6 +103,11 @@ def visualize_network(config):
     for (tag1, tag2), weight in network_analysis['strongest_connections']:
         print(f"#{tag1} - #{tag2}: {weight} co-occurrences")
         
+def generate_report(config):
+    report = GenerateReport()
+    report.create_report(config["AnalysisSettings"]["output_file"],config["ReportGeneration"]["path_to_wkhtmltopdf"])
+    
+    
 async def analyze_data(config):
     """Handle the analysis functionality with warning system integration"""
     # Get Telegram credentials from config
@@ -136,8 +143,8 @@ async def analyze_data(config):
 
 async def main():
     parser = argparse.ArgumentParser(description='Threads Data Analysis Tool')
-    parser.add_argument('command', choices=['scrape', 'analyze', 'visualize', 'all'],
-                      help='Command to execute: scrape, analyze, visualize, or all')
+    parser.add_argument('command', choices=['scrape', 'analyze', 'visualize','report', 'all'],
+                      help='Command to execute: scrape, analyze, visualize, report, or all')
     
     args = parser.parse_args()
     
@@ -158,6 +165,10 @@ async def main():
     if args.command == 'visualize' or args.command == 'all':
         print("Generating network visualization...")
         visualize_network(config)
+        
+    if args.command == 'report' or args.command == 'all':
+        print("Generating pdf report...")
+        generate_report(config)
 
 if __name__ == "__main__":
     asyncio.run(main())

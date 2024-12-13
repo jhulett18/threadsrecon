@@ -23,7 +23,7 @@ class ThreadsScraper:
     def __init__(self, base_url, chromedriver):
         self.base_url = base_url
         self.chrome_options = Options()
-        self.chrome_options.add_argument('--headless=new')
+        #self.chrome_options.add_argument('--headless=new')
 
         # Optimize performance
         self.chrome_options.add_argument('--disable-gpu')
@@ -76,7 +76,7 @@ class ThreadsScraper:
                     accept_cookies_button = self.wait.until(
                         EC.element_to_be_clickable((By.XPATH, "//div[text()='Allow all cookies']"))
                     )
-                    accept_cookies_button.click()
+                    self.driver.execute_script("arguments[0].click();", accept_cookies_button)
                     print("Accepted cookies")
                 except Exception as e:
                     print(f"Could not find or click the Accept Cookies button: {str(e)}")
@@ -126,7 +126,8 @@ class ThreadsScraper:
             # Navigate to the login form
             try:
                 login_div = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'Log in')]")))
-                login_div.click()
+                self.driver.execute_script("arguments[0].scrollIntoView(true);", login_div)
+                self.driver.execute_script("arguments[0].click();", login_div)
                 print("Clicked login div, redirecting to login page...")
             except Exception as e:
                 print(f"Failed to click the login div: {str(e)}")

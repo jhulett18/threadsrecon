@@ -4,6 +4,7 @@ OSINT Tool for threads.net
 ## Requirements
 - Google Chrome/Chromium with appropriate chromedriver version
 - Telegram bot
+- wkhtmltopdf installed
 
 ## Installation
 ### Generic
@@ -18,6 +19,7 @@ xattr -d com.apple.quarantine /opt/homebrew/bin/chromedriver
 python3 -m pip install -r requirements.txt
 ```
 - Crate your [Telegram bot](https://core.telegram.org/bots/tutorial) and obtain your bot token and chat ID.
+- Install [wkhtmltopdf](https://wkhtmltopdf.org/downloads.html) for your OS.
 - Create `settings.yaml` file.
 - Example configuration:
 ```bash
@@ -61,6 +63,9 @@ WarningSystem:
       - "update"
       - "info"
       - "notice"
+
+ReportGeneration:
+ path_to_wkhtmltopdf: your\path\to\wkhtmltopdf.exe # Example location: C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe
 ```
 
 ## Running

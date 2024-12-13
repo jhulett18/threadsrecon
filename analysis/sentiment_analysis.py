@@ -29,23 +29,6 @@ def analyze_sentiment_nltk(text):
         print(f"Error analyzing sentiment with NLTK: {str(e)}")
         return {'neg': 0, 'neu': 0, 'pos': 0, 'compound': 0}
 
-def tokenize_and_filter(text):
-    """Tokenize text and remove stopwords"""
-    try:
-        tokens = word_tokenize(text)
-        stop_words = set(stopwords.words('english'))
-        filtered_tokens = [word for word in tokens if word.isalnum() and word.lower() not in stop_words]
-        return filtered_tokens
-    except Exception as e:
-        print(f"Error tokenizing text: {str(e)}")
-        return []
-
-def extract_keywords(text):
-    """Extract keywords based on frequency"""
-    tokens = tokenize_and_filter(text)
-    keyword_counts = Counter(tokens)
-    return keyword_counts.most_common(5)  # Return top 5 keywords
-
 def extract_hashtags(text):
     """Extract hashtags from text"""
     hashtags = re.findall(r'#(\w+)', str(text))
@@ -118,8 +101,6 @@ def process_posts(posts_data):
                 'compound': nltk_sentiment['compound'],
                 'hashtags': hashtags,
                 'hashtag_count': len(hashtags),
-                'tokens': tokens,
-                'keywords': keywords
             })
         except Exception as e:
             print(f"Error processing post {post_key}: {str(e)}")
