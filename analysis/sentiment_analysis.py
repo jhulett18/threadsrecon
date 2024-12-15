@@ -79,10 +79,7 @@ def process_posts(posts_data):
             metadata = post.get('metadata', '').replace(' Share', '')
             metrics = parse_metadata(metadata)
 
-            # Tokenize and extract keywords
             text = post.get('text', '')
-            tokens = tokenize_and_filter(text)
-            keywords = extract_keywords(text)
 
             # Get sentiment
             nltk_sentiment = analyze_sentiment_nltk(text)

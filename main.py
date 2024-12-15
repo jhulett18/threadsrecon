@@ -105,7 +105,9 @@ def visualize_network(config):
         
 def generate_report(config):
     report = GenerateReport()
-    report.create_report(config["AnalysisSettings"]["output_file"],config["ReportGeneration"]["path_to_wkhtmltopdf"])
+    report.create_report(config["AnalysisSettings"]["output_file"],
+                         config["ReportGeneration"]["path_to_wkhtmltopdf"],
+                         config["AnalysisSettings"]["hashtag_network_static"])
     
     
 async def analyze_data(config):
