@@ -21,6 +21,8 @@ import random
 from urllib3.exceptions import MaxRetryError
 from requests.exceptions import RequestException
 from concurrent.futures import ThreadPoolExecutor
+from config.config_manager import ConfigManager
+
 
 
 class ThreadsScraperException(Exception):
@@ -78,19 +80,19 @@ class ThreadsScraperException(Exception):
             self.handle_http_error(url, e)
     
     def rate_limit(self):
-        """Add delay between requests to avoid rate limiting"""
-        delay = random.uniform(1, 3)  # Random delay between 1 and 3 seconds
+        delays = self.config.get_delays()
+        delay = random.uniform(delays['min_wait'], delays['max_wait'])
         time.sleep(delay)
 
-    def retry_with_backoff(self, func, *args, max_retries=3, initial_delay=1):
-        """Execute a function with retry logic and exponential backoff"""
-        for attempt in range(max_retries):
+    def retry_with_backoff(self, func, *args):
+        retries = self.config.get_retries()
+        for attempt in range(retries['max_attempts']):
             try:
                 return func(*args)
             except (TimeoutException, WebDriverException) as e:
-                if attempt == max_retries - 1:
+                if attempt == retries['max_attempts'] - 1:
                     self.handle_http_error(args[0] if args else "unknown URL", e)
-                delay = initial_delay * (2 ** attempt)  # Exponential backoff
+                delay = retries['initial_delay'] * (2 ** attempt)
                 print(f"Attempt {attempt + 1} failed, retrying in {delay} seconds...")
                 time.sleep(delay)
     pass
@@ -98,48 +100,33 @@ class ThreadsScraperException(Exception):
 class ThreadsScraper:
     
     def __init__(self, base_url, chromedriver):
+        self.config = ConfigManager()
         self.base_url = base_url
         self.chrome_options = Options()
-        #self.chrome_options.add_argument('--headless=new')
-
-        # Optimize performance
-        self.chrome_options.add_argument('--disable-gpu')
-        self.chrome_options.add_argument('--no-sandbox')
-        self.chrome_options.add_argument('--disable-dev-shm-usage')
-        self.chrome_options.add_argument('--disable-extensions')
-        self.chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        self.chrome_options.add_argument('--disable-infobars')
-        self.chrome_options.add_argument('--ignore-certificate-errors')
-        self.chrome_options.add_argument('--disable-logging')
-        self.chrome_options.add_argument('--disable-popup-blocking')
-        self.chrome_options.add_argument('--enable-automation')
-        self.chrome_options.add_argument('--window-size=1920,1080')
-        self.chrome_options.add_argument('--start-maximized')
-        self.chrome_options.add_argument('--incognito')
-        self.user_agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'
-        ]
-        self.chrome_options.add_argument(f'--user-agent={random.choice(self.user_agents)}')
-
-        self.chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        self.chrome_options.add_experimental_option("useAutomationExtension", False)
-        self.chrome_options.add_argument('--log-level=3')
+        
+        # Get browser options from config
+        browser_options = self.config.get_browser_options()
+        window_size = browser_options.get('window_size', {'width': 1920, 'height': 1080})
+        
+        # Apply browser options
+        if browser_options.get('headless', False):
+            self.chrome_options.add_argument('--headless=new')
+            
+        for feature in browser_options.get('disabled_features', []):
+            self.chrome_options.add_argument(f'--disable-{feature}')
+            
+        self.chrome_options.add_argument(f'--window-size={window_size["width"]},{window_size["height"]}')
+        
+        # Set user agent
+        user_agents = self.config.get_user_agents()
+        if user_agents:
+            self.chrome_options.add_argument(f'--user-agent={random.choice(user_agents)}')
+            
+        # Initialize WebDriver with configured timeouts
+        timeouts = self.config.get_timeouts()
         self.driver = webdriver.Chrome(service=Service(chromedriver), options=self.chrome_options)
-
-        # Adjust WebDriver to appear more human
-        self.driver.execute_cdp_cmd(
-            "Network.setUserAgentOverride",
-            {"userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"},
-        )
-        self.driver.execute_script(
-            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-        )
-
-        self.wait = WebDriverWait(self.driver, 20)
-        self.is_logged_in = False
-    
+        self.wait = WebDriverWait(self.driver, timeouts['element_wait'])
+        
     def login(self, username, password):
         """Log into Threads using Instagram credentials with improved error handling"""
         if self.is_logged_in:
@@ -730,9 +717,6 @@ class ThreadsScraper:
         except Exception as e:
             print(f"Unexpected error: {str(e)}")
             return {username: {"error": f"An unexpected error occurred: {str(e)}"}}
-        finally:
-            # Optionally reset any state or clean up
-            pass
         
         return {username: profile_data}
     

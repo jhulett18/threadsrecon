@@ -33,7 +33,33 @@ ScraperSettings:
   usernames:
     - target_username
     - target_username2
-
+  timeouts:
+    page_load: 20
+    element_wait: 10
+  retries:
+    max_attempts: 3
+    initial_delay: 1
+  delays:
+    min_wait: 1
+    max_wait: 3
+  user_agents:
+    - 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+    - 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+    - 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'
+  browser_options:
+    headless: false
+    window_size:
+      width: 1920
+      height: 1080
+    disabled_features:
+      - gpu
+      - sandbox
+      - dev-shm-usage
+      - extensions
+      - infobars
+      - logging
+      - popup-blocking
+      
 AnalysisSettings:
  input_file: data/profiles.json
  archive_file: data/archived_profiles.json
@@ -71,7 +97,16 @@ ReportGeneration:
 ## Running
 ```bash
 python main.py all 
+```
+```bash
 python main.py scrape 
+```
+```bash
 python main.py analyze 
+```
+```bash
 python main.py visualize 
+```
+```bash
+python main.py report
 ```
