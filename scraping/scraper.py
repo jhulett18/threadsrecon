@@ -8,7 +8,8 @@ from selenium.common.exceptions import (
     TimeoutException, 
     NoSuchElementException, 
     ElementClickInterceptedException,
-    StaleElementReferenceException
+    StaleElementReferenceException,
+    WebDriverException
 )
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
@@ -17,6 +18,80 @@ from urllib.parse import urlparse, parse_qs, unquote
 from datetime import datetime
 import time
 import random
+from urllib3.exceptions import MaxRetryError
+from requests.exceptions import RequestException
+
+class ThreadsScraperException(Exception):
+    def handle_http_error(self, url, error):
+        """Handle HTTP-related errors and provide meaningful messages"""
+        error_msg = str(error)
+        
+        if isinstance(error, TimeoutException):
+            raise ThreadsScraperException(
+                f"Timeout while accessing {url}. The server took too long to respond."
+            )
+        elif isinstance(error, WebDriverException):
+            if "net::ERR_CONNECTION_TIMED_OUT" in error_msg:
+                raise ThreadsScraperException(
+                    f"Connection timed out while accessing {url}. Please check your internet connection."
+                )
+            elif "net::ERR_NAME_NOT_RESOLVED" in error_msg:
+                raise ThreadsScraperException(
+                    f"Could not resolve the host name for {url}. Please check the URL."
+                )
+            elif "net::ERR_CONNECTION_REFUSED" in error_msg:
+                raise ThreadsScraperException(
+                    f"Connection refused by {url}. The server might be down or blocking requests."
+                )
+            elif "net::ERR_PROXY_CONNECTION_FAILED" in error_msg:
+                raise ThreadsScraperException(
+                    f"Proxy connection failed while accessing {url}. Please check your proxy settings."
+                )
+            elif "net::ERR_TOO_MANY_REDIRECTS" in error_msg:
+                raise ThreadsScraperException(
+                    f"Too many redirects while accessing {url}. The page might be in a redirect loop."
+                )
+        elif isinstance(error, NoSuchElementException):
+            raise ThreadsScraperException(
+                f"Required element not found on {url}. The page structure might have changed."
+            )
+        elif isinstance(error, ElementClickInterceptedException):
+            raise ThreadsScraperException(
+                f"Could not interact with element on {url}. Element might be obscured or not clickable."
+            )
+        elif isinstance(error, StaleElementReferenceException):
+            raise ThreadsScraperException(
+                f"Element is no longer attached to the DOM at {url}. Page might have been updated."
+            )
+        
+        raise ThreadsScraperException(f"Unexpected error while accessing {url}: {error_msg}")
+    
+    def check_connection(self, url):
+        """Check if the website is accessible"""
+        try:
+            self.driver.get(url)
+            self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            return True
+        except Exception as e:
+            self.handle_http_error(url, e)
+    
+    def rate_limit(self):
+        """Add delay between requests to avoid rate limiting"""
+        delay = random.uniform(1, 3)  # Random delay between 1 and 3 seconds
+        time.sleep(delay)
+
+    def retry_with_backoff(self, func, *args, max_retries=3, initial_delay=1):
+        """Execute a function with retry logic and exponential backoff"""
+        for attempt in range(max_retries):
+            try:
+                return func(*args)
+            except (TimeoutException, WebDriverException) as e:
+                if attempt == max_retries - 1:
+                    self.handle_http_error(args[0] if args else "unknown URL", e)
+                delay = initial_delay * (2 ** attempt)  # Exponential backoff
+                print(f"Attempt {attempt + 1} failed, retrying in {delay} seconds...")
+                time.sleep(delay)
+    pass
 
 class ThreadsScraper:
     
@@ -473,159 +548,187 @@ class ThreadsScraper:
             "reposts_count": 0,
             "reposts": {}
         }
-        self.driver.get(url)
-        time.sleep(2)
-
-        soup = BeautifulSoup(self.driver.page_source, 'html.parser')    
-        
-        name = soup.find('h1', {"dir": "auto"})
-        if name:
-            profile_data['name'] = name.get_text(strip=True)
-        else:
-            profile_data['name'] = "Name not found"
-        
-        
-        profile_picture = soup.find('meta',{'property':'og:image'})
-        if profile_picture:
-            image_url = profile_picture.get('content')
-            if image_url:
-                profile_data['profile_picture'] = image_url
+        try:
+            # Add retry logic
+            max_retries = 3
+            retry_count = 0
+            
+            while retry_count < max_retries:
+                try:
+                    self.driver.get(url)
+                    # Wait for the page to load
+                    self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+                    break
+                except TimeoutException:
+                    retry_count += 1
+                    if retry_count == max_retries:
+                        self.handle_http_error(url, TimeoutException("Page load timeout"))
+                    print(f"Attempt {retry_count} failed, retrying...")
+                    time.sleep(2 * retry_count)  # Exponential backoff
+                    
+            # Check for 404 or other error pages
+            if "Page not found" in self.driver.title or "Error" in self.driver.title:
+                raise ThreadsScraperException(f"Profile not found or unavailable: {username}")
+            soup = BeautifulSoup(self.driver.page_source, 'html.parser')    
+            
+            name = soup.find('h1', {"dir": "auto"})
+            if name:
+                profile_data['name'] = name.get_text(strip=True)
+            else:
+                profile_data['name'] = "Name not found"
+            
+            
+            profile_picture = soup.find('meta',{'property':'og:image'})
+            if profile_picture:
+                image_url = profile_picture.get('content')
+                if image_url:
+                    profile_data['profile_picture'] = image_url
+                else:
+                    profile_data['profile_picture'] = "Profile picture not found"
             else:
                 profile_data['profile_picture'] = "Profile picture not found"
-        else:
-            profile_data['profile_picture'] = "Profile picture not found"
-        
-        
-        bio = self.driver.find_element(By.XPATH, '(//span[@dir="auto"])[4]')
-        if bio:
-                profile_data['bio'] = bio.text.strip()
-        else:
-                profile_data['bio'] = "Bio not found"
-        
-        
-        external_links = soup.find_all('link', {"rel": "me"}) 
-        if external_links:
-                profile_data['external_links'] = [link.get('href') for link in external_links]
-        else:
-                profile_data['external_links'] = "External links not found"
-        
-        try:
-            instagram = self.driver.find_element(By.XPATH, '//a[contains(@href, "threads.net") and contains(@href, "instagram.com")]')
-            if instagram:
-                instagram_url = instagram.get_attribute('href')
-                if 'u=' in instagram_url:
-                    parsed_url = urlparse(instagram_url)
-                    query_params = parse_qs(parsed_url.query)
-                    instagram_url = query_params.get('u', [None])[0]
-                    if instagram_url:
-                        profile_data['instagram'] = unquote(instagram_url)
+            
+            
+            bio = self.driver.find_element(By.XPATH, '(//span[@dir="auto"])[4]')
+            if bio:
+                    profile_data['bio'] = bio.text.strip()
+            else:
+                    profile_data['bio'] = "Bio not found"
+            
+            
+            external_links = soup.find_all('link', {"rel": "me"}) 
+            if external_links:
+                    profile_data['external_links'] = [link.get('href') for link in external_links]
+            else:
+                    profile_data['external_links'] = "External links not found"
+            
+            try:
+                instagram = self.driver.find_element(By.XPATH, '//a[contains(@href, "threads.net") and contains(@href, "instagram.com")]')
+                if instagram:
+                    instagram_url = instagram.get_attribute('href')
+                    if 'u=' in instagram_url:
+                        parsed_url = urlparse(instagram_url)
+                        query_params = parse_qs(parsed_url.query)
+                        instagram_url = query_params.get('u', [None])[0]
+                        if instagram_url:
+                            profile_data['instagram'] = unquote(instagram_url)
+                        else:
+                            profile_data['instagram'] = "Instagram URL not found in 'u' parameter"
                     else:
-                        profile_data['instagram'] = "Instagram URL not found in 'u' parameter"
-                else:
-                    profile_data['instagram'] = instagram_url
-        except Exception as e:
-            print(f"Instagram link not found: {str(e)}")
-            profile_data['instagram'] = "Instagram link not found"
+                        profile_data['instagram'] = instagram_url
+            except Exception as e:
+                print(f"Instagram link not found: {str(e)}")
+                profile_data['instagram'] = "Instagram link not found"
 
-        #Collect followers
-        try:
-            # First try to get the count from the profile page
-            followers_count_elem = self.driver.find_element(By.XPATH, '//span[@dir="auto"][contains(text(), " followers")]')
-            displayed_followers_count = followers_count_elem.text.strip().replace('followers', '').strip()
-            
-            # Click to open followers window
-            followers_count_elem.click()
-            time.sleep(2)
-            
-            # Collect followers data
-            followers = self.scroll_and_collect_content('followers')
-            actual_followers_count = len(followers)
-            
-            # Use the actual count from collected data
-            profile_data['followers_count'] = str(actual_followers_count)
-            profile_data['followers'] = followers
-            
-            # Log if there's a discrepancy
-            if actual_followers_count != int(displayed_followers_count.replace(',', '')):
-                print(f"Warning: Followers count mismatch - Display: {displayed_followers_count}, Actual: {actual_followers_count}")
-
-            #Collect following
+            #Collect followers
             try:
                 # First try to get the count from the profile page
-                following_container = self.driver.find_element(By.XPATH,'//span[@dir="auto"][contains(text(), "Following")]')
-                following_count_elem = self.driver.find_element(By.XPATH, '//div[@aria-label="Following"]//span[@title]')
-                displayed_following_count = following_count_elem.get_attribute('title')
+                followers_count_elem = self.driver.find_element(By.XPATH, '//span[@dir="auto"][contains(text(), " followers")]')
+                displayed_followers_count = followers_count_elem.text.strip().replace('followers', '').strip()
                 
-                # Click to open following window
-                following_container.click()
+                # Click to open followers window
+                followers_count_elem.click()
                 time.sleep(2)
                 
-                # Collect following data
-                following = self.scroll_and_collect_content('following')
-                actual_following_count = len(following)
+                # Collect followers data
+                followers = self.scroll_and_collect_content('followers')
+                actual_followers_count = len(followers)
                 
                 # Use the actual count from collected data
-                profile_data['following_count'] = str(actual_following_count)
-                profile_data['following'] = following
+                profile_data['followers_count'] = str(actual_followers_count)
+                profile_data['followers'] = followers
                 
                 # Log if there's a discrepancy
-                if actual_following_count != int(displayed_following_count.replace(',', '')):
-                    print(f"Warning: Following count mismatch - Display: {displayed_following_count}, Actual: {actual_following_count}")
-                
-            except Exception as e:
-                print(f"Error collecting following data: {str(e)}")
-                profile_data['following_count'] = "Following count not found"
-                profile_data['following'] = {}
+                if actual_followers_count != int(displayed_followers_count.replace(',', '')):
+                    print(f"Warning: Followers count mismatch - Display: {displayed_followers_count}, Actual: {actual_followers_count}")
 
-            # Try multiple methods to close the window
-            try:
-                # Method 1: ActionChains
-                actions = ActionChains(self.driver)
-                actions.send_keys(Keys.ESCAPE).perform()
-                time.sleep(1) 
-                
-                # If that didn't work, try Method 2: Direct to body
-                if len(self.driver.find_elements(By.XPATH, "//div[contains(@role, 'dialog')]")) > 0:
-                    self.driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
-                    time.sleep(1)
+                #Collect following
+                try:
+                    # First try to get the count from the profile page
+                    following_container = self.driver.find_element(By.XPATH,'//span[@dir="auto"][contains(text(), "Following")]')
+                    following_count_elem = self.driver.find_element(By.XPATH, '//div[@aria-label="Following"]//span[@title]')
+                    displayed_following_count = following_count_elem.get_attribute('title')
                     
-                # If still open, try Method 3: Click close button if it exists
-                if len(self.driver.find_elements(By.XPATH, "//div[contains(@role, 'dialog')]")) > 0:
-                    close_button = self.driver.find_element(By.XPATH, "//button[@aria-label='Close' or contains(@class, 'close')]")
-                    close_button.click()
+                    # Click to open following window
+                    following_container.click()
+                    time.sleep(2)
                     
-            except Exception as e:
-                print(f"Error closing window: {e}")
+                    # Collect following data
+                    following = self.scroll_and_collect_content('following')
+                    actual_following_count = len(following)
+                    
+                    # Use the actual count from collected data
+                    profile_data['following_count'] = str(actual_following_count)
+                    profile_data['following'] = following
+                    
+                    # Log if there's a discrepancy
+                    if actual_following_count != int(displayed_following_count.replace(',', '')):
+                        print(f"Warning: Following count mismatch - Display: {displayed_following_count}, Actual: {actual_following_count}")
+                    
+                except Exception as e:
+                    print(f"Error collecting following data: {str(e)}")
+                    profile_data['following_count'] = "Following count not found"
+                    profile_data['following'] = {}
 
-        except Exception as e:
-            print(f"Error collecting followers data: {str(e)}")
-            profile_data['followers_count'] = "Followers not found"
-            profile_data['followers'] = {}
+                # Try multiple methods to close the window
+                try:
+                    # Method 1: ActionChains
+                    actions = ActionChains(self.driver)
+                    actions.send_keys(Keys.ESCAPE).perform()
+                    time.sleep(1) 
+                    
+                    # If that didn't work, try Method 2: Direct to body
+                    if len(self.driver.find_elements(By.XPATH, "//div[contains(@role, 'dialog')]")) > 0:
+                        self.driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
+                        time.sleep(1)
+                        
+                    # If still open, try Method 3: Click close button if it exists
+                    if len(self.driver.find_elements(By.XPATH, "//div[contains(@role, 'dialog')]")) > 0:
+                        close_button = self.driver.find_element(By.XPATH, "//button[@aria-label='Close' or contains(@class, 'close')]")
+                        close_button.click()
+                        
+                except Exception as e:
+                    print(f"Error closing window: {e}")
+
+            except Exception as e:
+                print(f"Error collecting followers data: {str(e)}")
+                profile_data['followers_count'] = "Followers not found"
+                profile_data['followers'] = {}
+
+                
+            
+            # Collect posts
+            print("Collecting posts...")
+            posts = self.scroll_and_collect_content('posts')
+            profile_data["posts"] = posts
+            profile_data["posts_count"] = len(posts)
 
             
-        
-        # Collect posts
-        print("Collecting posts...")
-        posts = self.scroll_and_collect_content('posts')
-        profile_data["posts"] = posts
-        profile_data["posts_count"] = len(posts)
-
-        
-        # Collect replies
-        print("Collecting replies...")
-        self.driver.get(f"{url}/replies")
-        time.sleep(2)
-        replies = self.scroll_and_collect_content('replies')
-        profile_data["replies"] = replies
-        profile_data["replies_count"] = len(replies)
-        
-        # Collect reposts
-        print("Collecting reposts...")
-        self.driver.get(f"{url}/reposts")
-        time.sleep(2)
-        reposts = self.scroll_and_collect_content('reposts')
-        profile_data["reposts"] = reposts
-        profile_data["reposts_count"] = len(reposts)
-        
+            # Collect replies
+            print("Collecting replies...")
+            self.driver.get(f"{url}/replies")
+            time.sleep(2)
+            replies = self.scroll_and_collect_content('replies')
+            profile_data["replies"] = replies
+            profile_data["replies_count"] = len(replies)
+            
+            # Collect reposts
+            print("Collecting reposts...")
+            self.driver.get(f"{url}/reposts")
+            time.sleep(2)
+            reposts = self.scroll_and_collect_content('reposts')
+            profile_data["reposts"] = reposts
+            profile_data["reposts_count"] = len(reposts)
+            
+        except ThreadsScraperException as e:
+            print(f"Scraping error: {str(e)}")
+            return {username: {"error": str(e)}}
+        except Exception as e:
+            print(f"Unexpected error: {str(e)}")
+            return {username: {"error": f"An unexpected error occurred: {str(e)}"}}
+        finally:
+            # Optionally reset any state or clean up
+            pass
         
         return {username: profile_data}
+    

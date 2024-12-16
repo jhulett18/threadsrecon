@@ -13,7 +13,7 @@ class GenerateReport:
             with open(data, 'r') as f:
                 data = json.load(f)
             
-            # Convert network image to base64 (if it's a file)
+            # Convert network image to base64
             image_html = ""
             if network_image_path and os.path.exists(network_image_path):
                 with open(network_image_path, 'rb') as img_file:
