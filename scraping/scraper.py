@@ -153,6 +153,10 @@ class ThreadsScraper:
                     )
                     self.driver.execute_script("arguments[0].click();", accept_cookies_button)
                     print("Accepted cookies")
+                except TimeoutException:
+                    raise ThreadsScraperException(
+                        "Timeout while waiting for cookies popup. The page may not have loaded properly."
+                    )
                 except Exception as e:
                     print(f"Could not find or click the Accept Cookies button: {str(e)}")
                     self.driver.save_screenshot("accept_cookies_error.png")
@@ -160,7 +164,11 @@ class ThreadsScraper:
             # Check if credentials are provided
             if username is None or password is None:
                 print("Attempting anonymous access...")
-                self.driver.get(self.base_url + "/login/")
+                try:
+                    self.driver.get(self.base_url + "/login/")
+                except WebDriverException as e:
+                    raise ThreadsScraperException().handle_http_error(self.base_url + "/login/", e)
+
                 time.sleep(2)
                 handle_cookies()
 
@@ -173,28 +181,21 @@ class ThreadsScraper:
                     print("Successfully selected 'Use without a profile'")
                     self.is_logged_in = True
                     return True
-                except Exception as e:
-                    print(f"Failed to select 'Use without a profile': {str(e)}")
-                    self.driver.save_screenshot("use_without_profile_error.png")
-                    return False
-
-                # Select "Use without a profile"
-                try:
-                    print("Selecting 'Use without a profile'...")
-                    use_without_profile_button = self.wait.until(
-                        EC.element_to_be_clickable((By.XPATH, "//div[text()='Use without a profile']"))
+                except TimeoutException:
+                    raise ThreadsScraperException(
+                        "Timeout while waiting for 'Use without a profile' button. The page may be unavailable."
                     )
-                    use_without_profile_button.click()
-                    print("Successfully selected 'Use without a profile'")
-                    self.is_logged_in = True
-                    return True
                 except Exception as e:
                     print(f"Failed to select 'Use without a profile': {str(e)}")
                     self.driver.save_screenshot("use_without_profile_error.png")
                     return False
 
             print("Attempting to log in...")
-            self.driver.get(self.base_url + "/login/?show_choice_screen=false")
+            try:
+                self.driver.get(self.base_url + "/login/?show_choice_screen=false")
+            except WebDriverException as e:
+                raise ThreadsScraperException().handle_http_error(self.base_url + "/login/", e)
+
             time.sleep(2)
             handle_cookies()
 
@@ -204,10 +205,14 @@ class ThreadsScraper:
                 self.driver.execute_script("arguments[0].scrollIntoView(true);", login_div)
                 self.driver.execute_script("arguments[0].click();", login_div)
                 print("Clicked login div, redirecting to login page...")
-            except Exception as e:
-                print(f"Failed to click the login div: {str(e)}")
-                self.driver.save_screenshot("login_div_error.png")
-                return False
+            except TimeoutException:
+                raise ThreadsScraperException(
+                    "Timeout while waiting for login button. The server might be slow or unresponsive."
+                )
+            except ElementClickInterceptedException:
+                raise ThreadsScraperException(
+                    "Could not click the login button. It might be covered by another element."
+                )
 
             # Fill in username
             try:
@@ -219,10 +224,10 @@ class ThreadsScraper:
                 username_input.clear()
                 username_input.send_keys(username)
                 time.sleep(1)
-            except Exception as e:
-                print(f"Error locating or filling the username input: {str(e)}")
-                self.driver.save_screenshot("username_input_error.png")
-                return False
+            except TimeoutException:
+                raise ThreadsScraperException(
+                    "Timeout while waiting for username input. The login form may not have loaded properly."
+                )
 
             # Fill in password
             try:
@@ -231,12 +236,12 @@ class ThreadsScraper:
                     EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Password']"))
                 )
                 password_input.clear()
-                password_input.send_keys(password + Keys.RETURN)  # Press Enter to submit
+                password_input.send_keys(password + Keys.RETURN)
                 time.sleep(2)
-            except Exception as e:
-                print(f"Error entering password or submitting form: {str(e)}")
-                self.driver.save_screenshot("password_submit_error.png")
-                return False
+            except TimeoutException:
+                raise ThreadsScraperException(
+                    "Timeout while waiting for password input. The login form may not have loaded properly."
+                )
 
             # Verify login success or detect 2FA
             try:
@@ -252,41 +257,34 @@ class ThreadsScraper:
                     self.is_logged_in = True
                     return True
             except TimeoutException:
-                # Check for 2FA prompt
-                try:
-                    print("Login not confirmed. Checking for 2FA prompt...")
-                    if self.wait.until(
-                        EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Security code']"))
-                    ):
-                        print("2FA detected. Use an account with 2FA disabled for this script.")
-                        return False
-                except TimeoutException:
-                    print("No 2FA prompt detected. Login failed.")
-                except Exception as e:
-                    print(f"Unexpected error during 2FA detection: {str(e)}")
-
-                # Check for automated behavior warning
-                try:
-                    print("Checking for automated behavior warning...")
-                    dismiss_button = self.wait.until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "div[role='button'][aria-label='Dismiss']"))
+                # Check for specific error conditions
+                if "checkpoint_required" in self.driver.current_url:
+                    raise ThreadsScraperException(
+                        "Account requires additional verification. Please log in manually first."
                     )
-                    dismiss_button.click()
-                    print("Dismissed automated behavior warning")
-                    self.is_logged_in = True
-                    return True
-                except Exception as e:
-                    print(f"No automated behavior warning found or could not dismiss: {str(e)}")
-                
-            # If neither login success nor 2FA detected, assume login failed
-            print("Login failed.")
-            self.driver.save_screenshot("login_failure.png")
-            return False
+                elif "login_challenge" in self.driver.current_url:
+                    raise ThreadsScraperException(
+                        "Suspicious login attempt detected. Please verify your account manually."
+                    )
+                elif "blocked" in self.driver.current_url:
+                    raise ThreadsScraperException(
+                        "Account has been temporarily blocked. Please try again later."
+                    )
+                else:
+                    raise ThreadsScraperException(
+                        "Login failed. Please check your credentials and try again."
+                    )
 
+        except ThreadsScraperException as e:
+            print(f"Login error: {str(e)}")
+            self.driver.save_screenshot("login_error.png")
+            raise
         except Exception as e:
-            print(f"Login failed: {str(e)}")
-            self.driver.save_screenshot("login_failed_error.png")
-            return False
+            print(f"Unexpected error during login: {str(e)}")
+            self.driver.save_screenshot("login_unexpected_error.png")
+            raise ThreadsScraperException(f"Unexpected error during login: {str(e)}")
+
+        return False
     
     
     def extract_post_data(self, post_element):
