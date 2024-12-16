@@ -20,6 +20,8 @@ import time
 import random
 from urllib3.exceptions import MaxRetryError
 from requests.exceptions import RequestException
+from concurrent.futures import ThreadPoolExecutor
+
 
 class ThreadsScraperException(Exception):
     def handle_http_error(self, url, error):
@@ -286,6 +288,10 @@ class ThreadsScraper:
 
         return False
     
+    def fetch_multiple_profiles(self, usernames, max_workers=5):
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            results = executor.map(self.fetch_profile, usernames)
+        return {k: v for result in results for k, v in result.items()}
     
     def extract_post_data(self, post_element):
         """Extract data from a post element"""
