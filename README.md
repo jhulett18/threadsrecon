@@ -1,12 +1,6 @@
 # threadsrecon
 OSINT Tool for threads.net
 
-<div align="center">
-
-![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-
-</div>
 ## Introduction
 This tool is designed to scrape, analyze, visualize data, and generate reports from threads.net. It is built using Python and leverages several open source Python libraries.
 
