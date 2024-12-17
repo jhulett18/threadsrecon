@@ -14,14 +14,27 @@ This tool is designed to scrape, analyze, visualize data, and generate reports f
 - **Custom Reporting**: Generate comprehensive PDF reports
 - **Data Export**: Export findings in JSON format
 
+## Technologies & Libraries
+- **Selenium**: Web automation and data scraping
+- **BeautifulSoup4**: HTML parsing and data extraction
+- **Pandas**: Data manipulation and analysis
+- **NLTK**: Natural language processing and sentiment analysis
+- **NetworkX**: Network analysis and visualization
+- **Matplotlib/Plotly**: Data visualization and charting
+- **python-telegram-bot**: Telegram bot integration
+- **pdfkit/wkhtmltopdf**: PDF report generation
+- **PyYAML**: Configuration management
+- **requests**: HTTP requests handling
+- **chromium/chromedriver**: Browser automation
+- **logging**: Debug and error logging
 
 ## Requirements
 - Python 3.8+
 - 2GB RAM minimum
 - Unix-based OS or Windows 10+
 - Google Chrome/Chromium with appropriate chromedriver version 90+
-- Telegram bot.
-- wkhtmltopdf installed.
+- Telegram bot
+- wkhtmltopdf installed
 
 ## Installation
 ### Generic
@@ -72,7 +85,9 @@ The `settings.yaml` file contains all configuration parameters. Key sections inc
 - **AnalysisSettings**: Data processing and output preferences
 - **WarningSystem**: Alert configuration
 - **ReportGeneration**: Report generation settings
+
 Create `settings.yaml` file in the root directory.
+
 Example configuration:
 ```bash
 Credentials:  # if not set, anonymous access will be used
@@ -118,7 +133,7 @@ AnalysisSettings:
  output_file: data/analyzed_profiles.json
  hashtag_network_static: data/visualizations/hashtag_network_static.png
  hashtag_network_interactive: data/visualizations/hashtag_network_interactive.html 
- sentiment_plot: data/visualizations/sentiment_plot.png
+ sentiment_plot: data/visualizations/sentiment_analysis.png
  engagement_plot: data/visualizations/engagement_metrics.png
  mutual_followers_plot: data/visualizations/mutual_followers.png
  hashtag_dist_plot: data/visualizations/hashtag_distribution.png
@@ -283,10 +298,3 @@ Common issues and solutions:
   3. Clear browser cache and cookies
   4. Verify all dependencies are installed correctly
   5. Ensure you have the latest version of Chrome installed
-
-  If issues persist, please open an issue on GitHub with:
-  - Full error message
-  - Configuration file (with sensitive data removed)
-  - Steps to reproduce
-  - Chrome and ChromeDriver versions
-
