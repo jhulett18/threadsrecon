@@ -13,6 +13,7 @@ from analysis.sentiment_analysis import analyze_sentiment_nltk, process_posts
 from processing.data_processing import DataProcessor
 from reports.report_generator import GenerateReport
 from visualization.visualization import HashtagNetworkAnalyzer
+from datetime import datetime
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
@@ -45,6 +46,14 @@ def setup_environment(config):
     if not os.path.exists("data"):
         print("Creating 'data' folder...")
         os.makedirs("data")
+
+    if not os.path.exists("data/visualizations"):
+        print("Creating 'data/visualizations' folder...")
+        os.makedirs("data/visualizations")
+
+    if not os.path.exists("data/reports"):
+        print("Creating 'data/reports' folder...")
+        os.makedirs("data/reports")
 
     chromedriver = config["ScraperSettings"]["chromedriver"]
     if not os.path.exists(chromedriver):
@@ -141,15 +150,26 @@ def visualize_all(config):
         print(f"#{tag1} - #{tag2}: {weight} co-occurrences")
         
 def generate_report(config):
+    from datetime import datetime
+    
+    # Create timestamp for filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = config["ReportGeneration"]["output_path"]
+    
+    # Insert timestamp before the file extension
+    base, ext = os.path.splitext(output_path)
+    output_path_with_timestamp = f"{base}_{timestamp}{ext}"
+    
     report = GenerateReport()
     report.create_report(config["AnalysisSettings"]["output_file"],
-                         config["ReportGeneration"]["path_to_wkhtmltopdf"],
-                         config["AnalysisSettings"]["hashtag_network_static"],
-                         config["AnalysisSettings"]["sentiment_plot"],
-                         config["AnalysisSettings"]["engagement_plot"],
-                         config["AnalysisSettings"]["mutual_followers_plot"],
-                         config["AnalysisSettings"]["hashtag_dist_plot"]
-                            )
+                        config["ReportGeneration"]["path_to_wkhtmltopdf"],
+                        config["AnalysisSettings"]["hashtag_network_static"],
+                        config["AnalysisSettings"]["sentiment_plot"],
+                        config["AnalysisSettings"]["engagement_plot"],
+                        config["AnalysisSettings"]["mutual_followers_plot"],
+                        config["AnalysisSettings"]["hashtag_dist_plot"],
+                        output_path_with_timestamp
+                        )
     
     
 async def analyze_data(config):

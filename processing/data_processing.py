@@ -5,6 +5,8 @@ import asyncio
 from analysis.sentiment_analysis import process_posts
 from visualization.visualization import HashtagNetworkAnalyzer 
 from warningsys.warning_system import TelegramAlertSystem, KeywordMonitor
+from functools import lru_cache
+
 
 class DataProcessor:
     def __init__(self, input_file, telegram_token=None, chat_id=None, priority_keywords=None):
@@ -56,7 +58,8 @@ class DataProcessor:
                 profile_data['followers'] = followers
                 profile_data['following'] = following
                 outer_profile[username] = profile_data
-                
+
+    @lru_cache(maxsize=32)
     def get_hashtag_stats(self, username=None):
         """Get hashtag statistics"""
         all_posts_data = []
@@ -203,6 +206,7 @@ class DataProcessor:
         analyzer = HashtagNetworkAnalyzer(combined_df)
         return analyzer.plot_hashtag_distribution()
     
+    @lru_cache(maxsize=32)
     def get_mutual_stats(self, username):
         outer_profile = self.data.get(username, {})
         profile_data = outer_profile.get(username, {})
