@@ -160,3 +160,116 @@ class HashtagNetworkAnalyzer:
                        ))
         
         return fig
+    
+    def plot_sentiment_trends(self, posts_df):
+        """Visualize sentiment trends over time"""
+        # Group by date and calculate average sentiment
+        daily_sentiment = posts_df.groupby(posts_df['date_posted'].dt.date).agg({
+            'compound': 'mean',
+            'pos': 'mean',
+            'neg': 'mean',
+            'neu': 'mean'
+        }).reset_index()
+        
+        # Create the plot
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ax.plot(daily_sentiment['date_posted'], daily_sentiment['compound'], 
+                label='Compound', linewidth=2)
+        ax.plot(daily_sentiment['date_posted'], daily_sentiment['pos'], 
+                label='Positive', alpha=0.7)
+        ax.plot(daily_sentiment['date_posted'], daily_sentiment['neg'], 
+                label='Negative', alpha=0.7)
+        
+        plt.title('Sentiment Analysis Trends Over Time')
+        plt.xlabel('Date')
+        plt.ylabel('Sentiment Score')
+        plt.legend()
+        plt.xticks(rotation=45)
+        return fig
+    
+    def plot_engagement_metrics(self, posts_df):
+        """Visualize likes, replies, and reposts trends"""
+        # Group by date and calculate engagement metrics
+        daily_engagement = posts_df.groupby(posts_df['date_posted'].dt.date).agg({
+            'likes': 'sum',
+            'replies': 'sum',
+            'reposts': 'sum'
+        }).reset_index()
+        
+        # Create subplot
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
+        
+        # Raw numbers
+        ax1.plot(daily_engagement['date_posted'], daily_engagement['likes'], 
+                label='Likes', marker='o')
+        ax1.plot(daily_engagement['date_posted'], daily_engagement['replies'], 
+                label='Replies', marker='s')
+        ax1.plot(daily_engagement['date_posted'], daily_engagement['reposts'], 
+                label='Reposts', marker='^')
+        ax1.set_title('Daily Engagement Metrics')
+        ax1.legend()
+        ax1.tick_params(axis='x', rotation=45)
+        
+        # Stacked percentage
+        engagement_pct = daily_engagement[['likes', 'replies', 'reposts']].div(
+            daily_engagement[['likes', 'replies', 'reposts']].sum(axis=1), axis=0)
+        engagement_pct.plot(kind='area', stacked=True, ax=ax2)
+        ax2.set_title('Engagement Distribution Over Time')
+        ax2.set_xlabel('Date')
+        ax2.set_ylabel('Percentage')
+        ax2.tick_params(axis='x', rotation=45)
+        
+        plt.tight_layout()
+        return fig
+    
+    def plot_mutual_followers_network(self, data):
+        """Visualize mutual followers relationships between users"""
+        G = nx.Graph()
+        
+        # Add nodes and edges
+        for username, profile_data in data.items():
+            G.add_node(username)
+            profile = profile_data.get(username, {})
+            followers = profile.get('followers', {})
+            following = profile.get('following', {})
+            
+            # Add edges for mutual followers
+            for follower in followers.values():
+                follower_username = follower.get('username')
+                if any(f.get('username') == follower_username for f in following.values()):
+                    G.add_edge(username, follower_username)
+        
+        # Create visualization
+        fig, ax = plt.subplots(figsize=(10, 10))
+        pos = nx.spring_layout(G)
+        nx.draw(G, pos, with_labels=True, node_color='lightblue', 
+                node_size=1000, font_size=8, font_weight='bold')
+        plt.title('Mutual Followers Network')
+        return fig
+    
+    def plot_hashtag_distribution(self):
+        """Visualize hashtag usage distribution"""
+        # Sort hashtags by frequency
+        sorted_tags = sorted(self.node_frequencies.items(), 
+                            key=lambda x: x[1], reverse=True)
+        tags, frequencies = zip(*sorted_tags[:20])  # Top 20 hashtags
+        
+        # Create bar plot
+        fig, ax = plt.subplots(figsize=(12, 6))
+        bars = ax.bar(tags, frequencies)
+        
+        # Customize appearance
+        plt.title('Top 20 Hashtags by Usage')
+        plt.xlabel('Hashtags')
+        plt.ylabel('Frequency')
+        plt.xticks(rotation=45, ha='right')
+        
+        # Add value labels on top of bars
+        for bar in bars:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                    f'{int(height)}',
+                    ha='center', va='bottom')
+        
+        plt.tight_layout()
+        return fig

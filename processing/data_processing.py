@@ -135,6 +135,74 @@ class DataProcessor:
                 reverse=True
             )[:10]
         }
+    def analyze_sentiment_trends(self):
+        """Analyze and visualize sentiment trends across all posts"""
+        # Collect all posts
+        all_posts_data = []
+        for username, outer_profile in self.data.items():
+            if isinstance(outer_profile, dict):
+                inner_profile = outer_profile.get(username, {})
+                posts = inner_profile.get('posts', {})
+                if posts:
+                    posts_df = process_posts(posts)
+                    posts_df['username'] = username
+                    all_posts_data.append(posts_df)
+        
+        combined_df = pd.concat(all_posts_data, ignore_index=True) if all_posts_data else pd.DataFrame()
+        
+        if combined_df.empty:
+            return None
+            
+        analyzer = HashtagNetworkAnalyzer(combined_df)
+        return analyzer.plot_sentiment_trends(combined_df)
+
+    def analyze_engagement_metrics(self):
+        """Analyze and visualize engagement metrics across all posts"""
+        # Collect all posts
+        all_posts_data = []
+        for username, outer_profile in self.data.items():
+            if isinstance(outer_profile, dict):
+                inner_profile = outer_profile.get(username, {})
+                posts = inner_profile.get('posts', {})
+                if posts:
+                    posts_df = process_posts(posts)
+                    posts_df['username'] = username
+                    all_posts_data.append(posts_df)
+        
+        combined_df = pd.concat(all_posts_data, ignore_index=True) if all_posts_data else pd.DataFrame()
+        
+        if combined_df.empty:
+            return None
+            
+        analyzer = HashtagNetworkAnalyzer(combined_df)
+        return analyzer.plot_engagement_metrics(combined_df)
+
+    def analyze_mutual_followers(self):
+        """Analyze and visualize mutual followers network"""
+        analyzer = HashtagNetworkAnalyzer(pd.DataFrame())  # Empty DataFrame since we don't need it for this visualization
+        return analyzer.plot_mutual_followers_network(self.data)
+
+    def analyze_hashtag_distribution(self):
+        """Analyze and visualize hashtag distribution"""
+        # Collect all posts
+        all_posts_data = []
+        for username, outer_profile in self.data.items():
+            if isinstance(outer_profile, dict):
+                inner_profile = outer_profile.get(username, {})
+                posts = inner_profile.get('posts', {})
+                if posts:
+                    posts_df = process_posts(posts)
+                    posts_df['username'] = username
+                    all_posts_data.append(posts_df)
+        
+        combined_df = pd.concat(all_posts_data, ignore_index=True) if all_posts_data else pd.DataFrame()
+        
+        if combined_df.empty:
+            return None
+            
+        analyzer = HashtagNetworkAnalyzer(combined_df)
+        return analyzer.plot_hashtag_distribution()
+    
     def get_mutual_stats(self, username):
         outer_profile = self.data.get(username, {})
         profile_data = outer_profile.get(username, {})

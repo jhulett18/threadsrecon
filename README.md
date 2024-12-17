@@ -65,7 +65,11 @@ AnalysisSettings:
  archive_file: data/archived_profiles.json
  output_file: data/analyzed_profiles.json
  hashtag_network_static: data/hashtag_network_static.png
- hastag_network_interactive: data/hashtag_network_interactive.html 
+ hashtag_network_interactive: data/hashtag_network_interactive.html 
+ sentiment_plot: data/sentiment_plot.png
+ engagement_plot: data/engagement_metrics.png
+ mutual_followers_plot: data/mutual_followers.png
+ hashtag_dist_plot: data/hashtag_distribution.png
  keywords: 
   - keyword1
   - keyword2

@@ -6,7 +6,7 @@ import datetime
 import base64
 
 class GenerateReport:
-    def create_report(self, data, path, network_image_path):
+    def create_report(self, data, path, network_image_path, sentiment_image_path, engagement_image_path, mutual_followers_image_path, hashtag_distribution_image_path):
         try:
             config = pdfkit.configuration(wkhtmltopdf=path)
             # Load JSON data
@@ -19,7 +19,26 @@ class GenerateReport:
                 with open(network_image_path, 'rb') as img_file:
                     img_data = base64.b64encode(img_file.read()).decode('utf-8')
                     image_html = f'<img src="data:image/png;base64,{img_data}" style="max-width: 100%; height: auto;">'
-            
+            sentiment_image_html = ""
+            if sentiment_image_path and os.path.exists(sentiment_image_path):
+                with open(sentiment_image_path, 'rb') as img_file:
+                    img_data = base64.b64encode(img_file.read()).decode('utf-8')
+                    sentiment_image_html = f'<img src="data:image/png;base64,{img_data}" style="max-width: 100%; height: auto;">'
+            engagement_image_html = ""
+            if engagement_image_path and os.path.exists(engagement_image_path):
+                with open(engagement_image_path, 'rb') as img_file:
+                    img_data = base64.b64encode(img_file.read()).decode('utf-8')
+                    engagement_image_html = f'<img src="data:image/png;base64,{img_data}" style="max-width: 100%; height: auto;">'
+            mutual_followers_image_html = ""
+            if mutual_followers_image_path and os.path.exists(mutual_followers_image_path):
+                with open(mutual_followers_image_path, 'rb') as img_file:
+                    img_data = base64.b64encode(img_file.read()).decode('utf-8')
+                    mutual_followers_image_html = f'<img src="data:image/png;base64,{img_data}" style="max-width: 100%; height: auto;">'
+            hashtag_distribution_image_html = ""
+            if hashtag_distribution_image_path and os.path.exists(hashtag_distribution_image_path):
+                with open(hashtag_distribution_image_path, 'rb') as img_file:
+                    img_data = base64.b64encode(img_file.read()).decode('utf-8')
+                    hashtag_distribution_image_html = f'<img src="data:image/png;base64,{img_data}" style="max-width: 100%; height: auto;">'
             # Create HTML content
             html_content = f"""
             <!DOCTYPE html>
@@ -92,6 +111,22 @@ class GenerateReport:
                 <h1>Hashtag Network</h1>
                 <div class="section network-image">
                     {image_html}
+                </div>
+                <h1>Sentiment Trends</h1>
+                <div class="section sentiment-image">
+                    {sentiment_image_html}
+                </div>
+                <h1>Engagement Metrics</h1>
+                <div class="section engagement-image">
+                    {engagement_image_html}
+                </div>
+                <h1>Mutual Followers Network</h1>
+                <div class="section mutual-followers-image">
+                    {mutual_followers_image_html}
+                </div>
+                <h1>Hashtag Distribution</h1>
+                <div class="section hashtag-distribution-image">
+                    {hashtag_distribution_image_html}
                 </div>
                 <footer>
                     Generated on {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}

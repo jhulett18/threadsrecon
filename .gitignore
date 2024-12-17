@@ -8,9 +8,7 @@ visualization/__pycache__/
 warningsys/__pycache__/
 config/__pycache__/
 
-data/profiles.json
-data/archived_profiles.json
-data/analyzed_profiles.json
+data/
 
 chromedriver.exe
 chromedriver
