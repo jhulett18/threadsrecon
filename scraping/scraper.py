@@ -103,11 +103,14 @@ class ThreadsScraper:
         self.config = ConfigManager()
         self.base_url = base_url
         self.chrome_options = Options()
+        self.is_logged_in = False
         
         # Get browser options from config
         browser_options = self.config.get_browser_options()
         window_size = browser_options.get('window_size', {'width': 1920, 'height': 1080})
         
+        self.chrome_options.add_argument('--incognito')
+
         # Apply browser options
         if browser_options.get('headless', False):
             self.chrome_options.add_argument('--headless=new')
@@ -231,7 +234,6 @@ class ThreadsScraper:
                 raise ThreadsScraperException(
                     "Timeout while waiting for password input. The login form may not have loaded properly."
                 )
-
             # Verify login success or detect 2FA
             try:
                 print("Checking login success...")

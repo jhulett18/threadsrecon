@@ -88,7 +88,9 @@ def visualize_network(config):
     """Handle the hashtag network visualization"""
     processor = DataProcessor(config["AnalysisSettings"]["input_file"])
     network_analysis = processor.analyze_hashtag_network()
-    
+    if network_analysis is None:
+        print("Error: Network analysis data is not available")
+        return
     if network_analysis['static']:
         network_analysis['static'].savefig(
             config["AnalysisSettings"]["hashtag_network_static"]
