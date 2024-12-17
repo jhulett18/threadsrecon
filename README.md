@@ -1,6 +1,12 @@
 # threadsrecon
 OSINT Tool for threads.net
 
+<div align="center">
+
+![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+</div>
 ## Introduction
 This tool is designed to scrape, analyze, visualize data, and generate reports from threads.net. It is built using Python and leverages several open source Python libraries.
 
@@ -47,6 +53,22 @@ docker build -t threadsrecon .
 Run the container.
 ```bash
 docker run -v $(pwd)/data:/app/data threadsrecon
+```
+## Quick Start
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/threadsrecon.git
+cd threadsrecon
+
+# Install dependencies
+python3 -m pip install -r requirements.txt
+
+# Create and configure settings.yaml
+cp settings.example.yaml settings.yaml
+nano settings.yaml  # Edit with your settings
+
+# Run the tool
+python main.py all
 ```
 ## Configuration
 ### Settings File Structure
@@ -171,10 +193,11 @@ data/
     └── report_YYYY-MM-DD.pdf
 ```
 ## Security Considerations
-- This tool respects threads.net's robots.txt
-- Data collected should be used in accordance with local privacy laws
-- Consider using a VPN and running in a virtual environment when collecting sensitive data.
-- Credential information is stored securely in settings.yaml
+- This tool respects threads.net's robots.txt.
+- Data collected should be used in accordance with local privacy laws.
+- Recommend not scraping with your personal account.
+- Consider using a VPN and running in a virtual environment when collecting data.
+- Credential information is stored securely in settings.yaml.
 
 ## Troubleshooting
 Common issues and solutions:
