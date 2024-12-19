@@ -49,10 +49,12 @@ Install the required libraries for python:
 python3 -m pip install -r requirements.txt
 ```
 Crate your [Telegram bot](https://core.telegram.org/bots/tutorial) and obtain your bot token and chat ID.
+
 Install [wkhtmltopdf](https://wkhtmltopdf.org/downloads.html) for your OS.
 
 ### Docker Installation
 Install Docker.
+
 Build the container.
 ```bash
 docker build -t threadsrecon .
