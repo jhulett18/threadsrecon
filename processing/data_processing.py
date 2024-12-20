@@ -1,3 +1,15 @@
+"""
+Data Processing Module
+
+This module handles the processing, analysis, and archiving of social media data.
+It includes functionality for:
+- Loading and processing JSON data
+- Analyzing mutual follower relationships
+- Processing hashtags and engagement metrics
+- Integrating with warning systems
+- Archiving processed data
+"""
+
 import json
 from datetime import datetime
 import pandas as pd
@@ -9,7 +21,32 @@ from functools import lru_cache
 
 
 class DataProcessor:
+    """
+    A class to process and analyze social media data
+    
+    This class handles:
+    - Data loading and validation
+    - Mutual follower analysis
+    - Hashtag statistics
+    - Integration with warning systems
+    - Data archiving
+    
+    Attributes:
+        input_file (str): Path to input JSON data file
+        data (dict): Loaded and processed data
+        keyword_monitor (KeywordMonitor): Optional warning system integration
+    """
+
     def __init__(self, input_file, telegram_token=None, chat_id=None, priority_keywords=None):
+        """
+        Initialize the DataProcessor
+        
+        Args:
+            input_file (str): Path to JSON data file
+            telegram_token (str, optional): Telegram bot API token for alerts
+            chat_id (str, optional): Telegram chat ID for alerts
+            priority_keywords (dict, optional): Keywords to monitor by priority level
+        """
         self.input_file = input_file
         self.data = self.load_data()
         self.add_mutual_follower_status()
@@ -20,7 +57,15 @@ class DataProcessor:
             self.keyword_monitor = KeywordMonitor(telegram_token, chat_id, priority_keywords)
 
     def load_data(self):
-        """Load JSON data from file"""
+        """
+        Load JSON data from file
+        
+        Returns:
+            dict: Loaded data or empty dict if file not found
+            
+        Note:
+            Creates empty data structure if file doesn't exist
+        """
         try:
             with open(self.input_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
@@ -29,18 +74,30 @@ class DataProcessor:
             return {}
 
     def add_mutual_follower_status(self):
-        """Add is_mutual field to followers/following data"""
+        """
+        Add mutual follower status to all user relationships
+        
+        Processes the data to:
+        1. Identify mutual following relationships
+        2. Add 'is_mutual' field to follower/following entries
+        3. Handle nested data structures
+        
+        Note:
+            Updates the data in-place
+        """
         for username, outer_profile in self.data.items():
-            # Handle the double nesting
+            # Handle the double nesting of profile data
             profile_data = outer_profile.get(username, {})
             
             if isinstance(profile_data, dict):
                 followers = profile_data.get('followers', {})
                 following = profile_data.get('following', {})
                 
-                # Extract actual usernames from the nested structure
-                follower_usernames = {v['username'] for k, v in followers.items() if isinstance(v, dict) and 'username' in v}
-                following_usernames = {v['username'] for k, v in following.items() if isinstance(v, dict) and 'username' in v}
+                # Extract usernames from nested structures
+                follower_usernames = {v['username'] for k, v in followers.items() 
+                                   if isinstance(v, dict) and 'username' in v}
+                following_usernames = {v['username'] for k, v in following.items() 
+                                    if isinstance(v, dict) and 'username' in v}
                 
                 # Update followers with mutual status
                 for _, follower_data in followers.items():
@@ -61,10 +118,26 @@ class DataProcessor:
 
     @lru_cache(maxsize=32)
     def get_hashtag_stats(self, username=None):
-        """Get hashtag statistics"""
+        """
+        Get hashtag usage statistics for specified user or all users
+        
+        Args:
+            username (str, optional): Specific username to analyze. If None, analyzes all users.
+            
+        Returns:
+            dict: Statistics including:
+                - total_hashtags: Total number of hashtags used
+                - unique_hashtags: Number of unique hashtags
+                - top_hashtags: Most frequently used hashtags
+                - avg_hashtags_per_post: Average hashtags per post
+                
+        Note:
+            Results are cached using lru_cache for performance
+        """
         all_posts_data = []
         
         if username:
+            # Process single user's posts
             outer_profile = self.data.get(username, {})
             if isinstance(outer_profile, dict):
                 inner_profile = outer_profile.get(username, {})
@@ -74,6 +147,7 @@ class DataProcessor:
                     posts_df['username'] = username
                     all_posts_data.append(posts_df)
         else:
+            # Process all users' posts
             for username, outer_profile in self.data.items():
                 if isinstance(outer_profile, dict):
                     inner_profile = outer_profile.get(username, {})
@@ -93,7 +167,7 @@ class DataProcessor:
                 'avg_hashtags_per_post': 0
             }
         
-        # Explode the hashtags list to analyze individual hashtags
+        # Analyze hashtag usage
         hashtag_series = combined_df.explode('hashtags')['hashtags']
         hashtag_counts = hashtag_series.value_counts()
         
@@ -208,13 +282,30 @@ class DataProcessor:
     
     @lru_cache(maxsize=32)
     def get_mutual_stats(self, username):
+        """
+        Get mutual follower statistics for a specific user
+        
+        Args:
+            username (str): Username to analyze
+            
+        Returns:
+            dict: Statistics including:
+                - mutual_followers: Number of mutual followers
+                - total_followers: Total number of followers
+                - total_following: Total number of following
+                - mutual_percentage: Percentage of followers that are mutual
+                - mutual_follower_usernames: List of mutual follower usernames
+                
+        Note:
+            Results are cached using lru_cache for performance
+        """
         outer_profile = self.data.get(username, {})
         profile_data = outer_profile.get(username, {})
         
         followers = profile_data.get('followers', {})
         following = profile_data.get('following', {})
         
-        # Calculate actual counts based on collected data
+        # Calculate statistics
         total_followers = len(followers)
         total_following = len(following)
         
@@ -242,7 +333,17 @@ class DataProcessor:
         }
 
     def filter_by_date(self, df, start_date=None, end_date=None):
-        """Filter DataFrame by date range"""
+        """
+        Filter DataFrame by date range
+        
+        Args:
+            df (pd.DataFrame): DataFrame to filter
+            start_date (str, optional): Start date for filtering
+            end_date (str, optional): End date for filtering
+            
+        Returns:
+            pd.DataFrame: Filtered DataFrame
+        """
         if df.empty:
             return df
         if start_date:
@@ -252,7 +353,16 @@ class DataProcessor:
         return df
     
     def filter_by_keywords(self, df, keywords):
-        """Filter DataFrame by keywords in text"""
+        """
+        Filter DataFrame by keywords in text
+        
+        Args:
+            df (pd.DataFrame): DataFrame to filter
+            keywords (list): List of keywords to search for
+            
+        Returns:
+            pd.DataFrame: Filtered DataFrame containing only rows with matching keywords
+        """
         if df.empty or not keywords:
             return df
         
@@ -260,7 +370,17 @@ class DataProcessor:
         return df[df['text'].str.contains(pattern, case=False, na=False)]
 
     def archive_profiles(self, output_file):
-        """Archive raw profile data with metadata by updating existing archive"""
+        """
+        Archive raw profile data with metadata
+        
+        Args:
+            output_file (str): Path to archive file
+            
+        Note:
+            - Updates existing archive if it exists
+            - Adds metadata including timestamps and profile counts
+            - Preserves first archived date if it exists
+        """
         # First try to load existing archive
         existing_archive = {}
         try:

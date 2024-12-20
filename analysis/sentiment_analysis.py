@@ -1,4 +1,9 @@
-# analysis/analyze.py
+"""
+Sentiment Analysis Module
+
+This module provides functionality for analyzing sentiment in text data from social media posts.
+It includes tools for sentiment scoring, hashtag extraction, and metadata parsing.
+"""
 
 import pandas as pd
 from textblob import TextBlob
@@ -12,16 +17,34 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 from collections import Counter
 
 # Download necessary NLTK resources
-nltk.download('punkt')
-nltk.download('punkt_tab')
-nltk.download('stopwords')
-nltk.download('vader_lexicon')
+# These are required for text tokenization and sentiment analysis
+nltk.download('punkt')        # Tokenizer data
+nltk.download('punkt_tab')    # Additional tokenizer data
+nltk.download('stopwords')    # Common words to filter out
+nltk.download('vader_lexicon')  # Sentiment analysis lexicon
 
-# Initialize SentimentIntensityAnalyzer
+# Initialize the VADER sentiment analyzer
+# VADER (Valence Aware Dictionary and sEntiment Reasoner) is specifically
+# attuned to sentiments expressed in social media
 sia = SentimentIntensityAnalyzer()
 
 def analyze_sentiment_nltk(text):
-    """Analyze sentiment of text using NLTK SentimentIntensityAnalyzer"""
+    """
+    Analyze sentiment of text using NLTK's VADER SentimentIntensityAnalyzer
+    
+    Args:
+        text (str): The text to analyze
+        
+    Returns:
+        dict: Dictionary containing sentiment scores:
+            - neg: Negative sentiment score (0-1)
+            - neu: Neutral sentiment score (0-1)
+            - pos: Positive sentiment score (0-1)
+            - compound: Normalized compound score (-1 to 1)
+            
+    Note:
+        Returns zero scores if analysis fails
+    """
     try:
         scores = sia.polarity_scores(text)
         return scores
@@ -30,17 +53,47 @@ def analyze_sentiment_nltk(text):
         return {'neg': 0, 'neu': 0, 'pos': 0, 'compound': 0}
 
 def extract_hashtags(text):
-    """Extract hashtags from text"""
+    """
+    Extract hashtags from text using regex
+    
+    Args:
+        text (str): Text to extract hashtags from
+        
+    Returns:
+        list: List of hashtags found (without the # symbol)
+        
+    Example:
+        >>> extract_hashtags("Hello #world #python")
+        ['world', 'python']
+    """
     hashtags = re.findall(r'#(\w+)', str(text))
     return hashtags
 
 def parse_metadata(metadata_str):
-    """Parse metadata string into metrics"""
+    """
+    Parse metadata string into engagement metrics
+    
+    Args:
+        metadata_str (str): String containing engagement information
+            Expected format: "X likes Y replies Z reposts"
+            
+    Returns:
+        dict: Dictionary containing:
+            - likes (int): Number of likes
+            - replies (int): Number of replies
+            - reposts (int): Number of reposts
+            
+    Example:
+        >>> parse_metadata("5 likes 2 replies 1 repost")
+        {'likes': 5, 'replies': 2, 'reposts': 1}
+    """
+    # Initialize default metrics
     metrics = {'likes': 0, 'replies': 0, 'reposts': 0}
     if not metadata_str:
         return metrics
     
     try:
+        # Split metadata string into words
         parts = metadata_str.lower().split()
         i = 0
         while i < len(parts):
@@ -48,7 +101,7 @@ def parse_metadata(metadata_str):
             # Look ahead to check if next part exists and is a number
             if i + 1 < len(parts):
                 next_part = parts[i + 1]
-                # Convert number words to digits if needed
+                # Parse different types of engagement metrics
                 if current_part == 'like' or current_part == 'likes':
                     try:
                         metrics['likes'] = int(next_part)
@@ -70,21 +123,56 @@ def parse_metadata(metadata_str):
     return metrics
 
 def process_posts(posts_data):
-    """Process posts into a pandas DataFrame with sentiment analysis"""
+    """
+    Process posts into a pandas DataFrame with sentiment analysis
+    
+    Args:
+        posts_data (dict): Dictionary containing post data
+            Expected format:
+            {
+                'post_id': {
+                    'text': str,
+                    'date_posted': str,
+                    'metadata': str
+                },
+                ...
+            }
+            
+    Returns:
+        pandas.DataFrame: DataFrame containing processed posts with columns:
+            - post_id: Unique identifier for the post
+            - text: Original post text
+            - date_posted: Timestamp of post
+            - likes: Number of likes
+            - replies: Number of replies
+            - reposts: Number of reposts
+            - neg: Negative sentiment score
+            - neu: Neutral sentiment score
+            - pos: Positive sentiment score
+            - compound: Compound sentiment score
+            - hashtags: List of hashtags used
+            - hashtag_count: Number of hashtags used
+            
+    Note:
+        - Handles missing data gracefully
+        - Converts dates to datetime objects
+        - Includes both sentiment analysis and engagement metrics
+    """
     processed_posts = []
     
     for post_key, post in posts_data.items():
         try:
-            # Extract metadata metrics
+            # Extract and clean metadata
             metadata = post.get('metadata', '').replace(' Share', '')
             metrics = parse_metadata(metadata)
 
             text = post.get('text', '')
 
-            # Get sentiment
+            # Perform sentiment analysis and hashtag extraction
             nltk_sentiment = analyze_sentiment_nltk(text)
             hashtags = extract_hashtags(text)
 
+            # Create processed post entry
             processed_posts.append({
                 'post_id': post_key,
                 'text': text,
@@ -103,6 +191,7 @@ def process_posts(posts_data):
             print(f"Error processing post {post_key}: {str(e)}")
             continue
     
+    # Convert to DataFrame and handle dates
     df = pd.DataFrame(processed_posts)
     if not df.empty:
         df['date_posted'] = pd.to_datetime(df['date_posted'])

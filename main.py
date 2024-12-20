@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+Main entry point for the Threads Data Analysis Tool
+This script orchestrates the entire data pipeline:
+- Data scraping from Threads.net
+- Data analysis and processing
+- Visualization generation
+- Report creation
+"""
+
 import os
 import sys
 import yaml
@@ -14,11 +23,16 @@ from processing.data_processing import DataProcessor
 from reports.report_generator import GenerateReport
 from visualization.visualization import HashtagNetworkAnalyzer
 from datetime import datetime
+
+# Ensure we're running from the correct directory
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
 
 def check_requirements():
-    """Check Python version and required dependencies"""
+    """
+    Check Python version and required dependencies
+    Exits if Python version is < 3.6 or if required packages are missing
+    """
     if sys.version_info < (3, 6):
         print("Python 3.6 or higher is required. Please upgrade your Python version.")
         sys.exit(1)
@@ -31,7 +45,14 @@ def check_requirements():
         sys.exit(1)
 
 def load_config():
-    """Load and validate configuration from settings.yaml"""
+    """
+    Load and validate configuration from settings.yaml
+    
+    Returns:
+        dict: Configuration settings from YAML file
+    
+    Exits if settings.yaml is missing
+    """
     if not os.path.exists("settings.yaml"):
         print("Configuration file 'settings.yaml' is missing. Exiting...")
         sys.exit(1)
@@ -42,27 +63,47 @@ def load_config():
     return config
 
 def setup_environment(config):
-    """Set up necessary folders and validate paths"""
-    if not os.path.exists("data"):
-        print("Creating 'data' folder...")
-        os.makedirs("data")
+    """
+    Set up necessary folders and validate paths
+    
+    Creates required directories if they don't exist:
+    - data/
+    - data/visualizations/
+    - data/reports/
+    
+    Args:
+        config (dict): Configuration dictionary containing path settings
+    
+    Exits if chromedriver is not found at specified path
+    """
+    # Create necessary directories
+    for directory in ["data", "data/visualizations", "data/reports"]:
+        if not os.path.exists(directory):
+            print(f"Creating '{directory}' folder...")
+            os.makedirs(directory)
 
-    if not os.path.exists("data/visualizations"):
-        print("Creating 'data/visualizations' folder...")
-        os.makedirs("data/visualizations")
-
-    if not os.path.exists("data/reports"):
-        print("Creating 'data/reports' folder...")
-        os.makedirs("data/reports")
-
+    # Validate chromedriver existence
     chromedriver = config["ScraperSettings"]["chromedriver"]
     if not os.path.exists(chromedriver):
         print(f"Chromedriver not found at path: {chromedriver}. Exiting...")
         sys.exit(1)
 
 def scrape_data(config):
-    """Handle the scraping functionality"""
+    """
+    Handle the scraping functionality
+    
+    Args:
+        config (dict): Configuration containing scraping settings and credentials
+    
+    Processes:
+    1. Extracts required configuration
+    2. Initializes scraper
+    3. Logs in to Instagram
+    4. Scrapes profile data for each username
+    5. Saves results to JSON file
+    """
     try:
+        # Extract required configuration
         base_url = config["ScraperSettings"]["base_url"]
         usernames = config["ScraperSettings"]["usernames"]
         chromedriver = config["ScraperSettings"]["chromedriver"]
@@ -77,6 +118,7 @@ def scrape_data(config):
     all_profiles_data = {}
 
     try:
+        # Attempt login and data collection
         if not scraper.login(instagram_username, instagram_password):
             print("Failed to login. Exiting...")
             return
@@ -89,16 +131,31 @@ def scrape_data(config):
             else:
                 print(f"No data retrieved for {username}.")
 
+        # Save collected data
         with open("data/profiles.json", "w") as json_file:
             json.dump(all_profiles_data, json_file, indent=4)
     finally:
         scraper.driver.quit()
         
 def visualize_all(config):
-    """Handle all visualizations"""
+    """
+    Generate all visualizations from the processed data
+    
+    Args:
+        config (dict): Configuration containing visualization settings
+    
+    Creates:
+    1. Hashtag network visualizations (static and interactive)
+    2. Sentiment trends plot
+    3. Engagement metrics plot
+    4. Mutual followers network plot
+    5. Hashtag distribution plot
+    
+    Also prints the strongest hashtag connections found in the data
+    """
     processor = DataProcessor(config["AnalysisSettings"]["input_file"])
     
-    # Get all posts data as a DataFrame
+    # Combine all posts data into a single DataFrame
     all_posts_data = []
     for username, outer_profile in processor.data.items():
         if isinstance(outer_profile, dict):
@@ -111,12 +168,18 @@ def visualize_all(config):
     
     combined_df = pd.concat(all_posts_data, ignore_index=True) if all_posts_data else pd.DataFrame()
     
-    # Now create analyzer with the processed DataFrame
+    # Initialize analyzer and generate visualizations
     analyzer = HashtagNetworkAnalyzer(combined_df)
     
-    # Generate static and interactive network visualizations
-    static_fig = analyzer.plot_matplotlib()
-    interactive_fig = analyzer.plot_plotly()
+    # Generate and save all visualizations
+    visualizations = {
+        'static_network': (analyzer.plot_matplotlib(), config["AnalysisSettings"]["hashtag_network_static"]),
+        'interactive_network': (analyzer.plot_plotly(), config["AnalysisSettings"]["hashtag_network_interactive"]),
+        'sentiment': (analyzer.plot_sentiment_trends(combined_df), config["AnalysisSettings"]["sentiment_plot"]),
+        'engagement': (analyzer.plot_engagement_metrics(combined_df), config["AnalysisSettings"]["engagement_plot"]),
+        'mutual_followers': (analyzer.plot_mutual_followers_network(processor.data), config["AnalysisSettings"]["mutual_followers_plot"]),
+        'hashtag_dist': (analyzer.plot_hashtag_distribution(), config["AnalysisSettings"]["hashtag_dist_plot"])
+    }
     
     # Generate other visualizations
     sentiment_plot = analyzer.plot_sentiment_trends(combined_df)
@@ -148,8 +211,19 @@ def visualize_all(config):
     print("\nStrongest hashtag connections:")
     for (tag1, tag2), weight in edge_weights:
         print(f"#{tag1} - #{tag2}: {weight} co-occurrences")
-        
+
 def generate_report(config):
+    """
+    Generate a PDF report with all analysis results
+    
+    Args:
+        config (dict): Configuration containing report generation settings
+    
+    Creates:
+    - PDF report with timestamp in filename
+    - Includes all visualizations and analysis results
+    - Saves to configured output path
+    """
     from datetime import datetime
     
     # Create timestamp for filename
@@ -173,7 +247,21 @@ def generate_report(config):
     
     
 async def analyze_data(config):
-    """Handle the analysis functionality with warning system integration"""
+    """
+    Handle the analysis functionality with warning system integration
+    
+    Args:
+        config (dict): Configuration containing analysis settings and warning system credentials
+    
+    Features:
+    - Integrates with Telegram warning system
+    - Processes data based on configured date range
+    - Archives processed data
+    - Reports processing statistics
+    
+    Returns:
+        None, but prints processing results
+    """
     # Get Telegram credentials from config
     telegram_token = config.get("WarningSystem", {}).get("token")
     chat_id = config.get("WarningSystem", {}).get("chat_id")
@@ -209,6 +297,22 @@ async def analyze_data(config):
         print("No data to process.")
 
 async def main():
+    """
+    Main entry point for the application
+    
+    Handles:
+    1. Command line argument parsing
+    2. Initial setup and configuration
+    3. Execution of requested operations (scrape/analyze/visualize/report)
+    4. Sequential execution of all operations if 'all' is specified
+    
+    Command line options:
+    - scrape: Collect data from Threads.net
+    - analyze: Process and analyze collected data
+    - visualize: Generate visualization of analysis results
+    - report: Create PDF report of findings
+    - all: Execute all above operations in sequence
+    """
     parser = argparse.ArgumentParser(description='Threads Data Analysis Tool')
     parser.add_argument('command', choices=['scrape', 'analyze', 'visualize','report', 'all'],
                       help='Command to execute: scrape, analyze, visualize, report, or all')

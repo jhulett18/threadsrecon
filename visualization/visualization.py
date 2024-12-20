@@ -9,13 +9,22 @@ class HashtagNetworkAnalyzer:
         """
         Initialize analyzer with a DataFrame containing posts and their hashtags
         posts_df should have a 'hashtags' column containing lists of hashtags
+        
+        The class maintains two main data structures:
+        - edge_weights: Dictionary tracking how often hashtag pairs appear together
+        - node_frequencies: Dictionary tracking individual hashtag usage counts
         """
         self.posts_df = posts_df
         self.edge_weights = self._calculate_edge_weights()
         self.node_frequencies = self._calculate_node_frequencies()
         
     def _calculate_edge_weights(self):
-        """Calculate how often hashtags appear together"""
+        """
+        Calculate how often hashtags appear together
+        Creates edges between hashtags that appear in the same post
+        Uses sorted tuples as keys to ensure consistent edge representation
+        Returns: Dictionary with (hashtag1, hashtag2) tuples as keys and co-occurrence counts as values
+        """
         edge_weights = defaultdict(int)
         
         for hashtags in self.posts_df['hashtags']:
@@ -30,7 +39,11 @@ class HashtagNetworkAnalyzer:
         return edge_weights
     
     def _calculate_node_frequencies(self):
-        """Calculate how often each hashtag appears"""
+        """
+        Calculate how often each hashtag appears
+        Counts individual hashtag occurrences across all posts
+        Returns: Dictionary with hashtags as keys and their frequencies as values
+        """
         frequencies = defaultdict(int)
         
         for hashtags in self.posts_df['hashtags']:
@@ -41,7 +54,15 @@ class HashtagNetworkAnalyzer:
         return frequencies
     
     def create_network_graph(self, min_edge_weight=2, min_node_freq=3):
-        """Create NetworkX graph with filtered edges and nodes"""
+        """
+        Create NetworkX graph with filtered edges and nodes
+        
+        Parameters:
+        - min_edge_weight: Minimum number of co-occurrences required to create an edge
+        - min_node_freq: Minimum number of times a hashtag must appear to be included
+        
+        Returns: NetworkX Graph object with filtered nodes and weighted edges
+        """
         G = nx.Graph()
         
         # Add edges that meet minimum weight threshold
@@ -55,7 +76,17 @@ class HashtagNetworkAnalyzer:
         return G
     
     def plot_matplotlib(self, min_edge_weight=2, min_node_freq=3, figsize=(12, 8)):
-        """Create static visualization using matplotlib"""
+        """
+        Create static visualization using matplotlib
+        
+        Features:
+        - Node size represents hashtag frequency
+        - Edge thickness represents co-occurrence frequency
+        - Uses spring layout for node positioning
+        - Includes interactive zooming and panning
+        
+        Returns: Matplotlib figure object or None if no nodes meet criteria
+        """
         G = self.create_network_graph(min_edge_weight, min_node_freq)
         
         if len(G) == 0:
@@ -86,7 +117,24 @@ class HashtagNetworkAnalyzer:
         return plt.gcf()
     
     def plot_plotly(self, min_edge_weight=2, min_node_freq=3):
-        """Create interactive visualization using plotly"""
+        """
+        Create interactive visualization using plotly
+        
+        Features:
+        - Interactive hovering with hashtag frequency information
+        - Draggable nodes
+        - Zoomable and pannable interface
+        - Color gradient representing hashtag frequency
+        - Customizable node sizes based on frequency
+        
+        Technical details:
+        - Uses spring layout for initial node positioning
+        - Creates separate traces for edges and nodes
+        - Implements custom hover text formatting
+        - Includes color scale for frequency visualization
+        
+        Returns: Plotly Figure object or None if no nodes meet criteria
+        """
         G = self.create_network_graph(min_edge_weight, min_node_freq)
         
         if len(G) == 0:
@@ -223,7 +271,21 @@ class HashtagNetworkAnalyzer:
         return fig
     
     def plot_mutual_followers_network(self, data):
-        """Visualize mutual followers relationships between users"""
+        """
+        Visualize mutual followers relationships between users
+        
+        Creates a network graph where:
+        - Nodes represent users
+        - Edges represent mutual follow relationships
+        - Node size and color can be customized
+        - Uses spring layout for optimal visualization
+        
+        Data structure requirements:
+        - data should contain nested dictionaries with user profiles
+        - Each profile should have 'followers' and 'following' lists
+        
+        Returns: Matplotlib figure showing the mutual followers network
+        """
         G = nx.Graph()
         
         # Add nodes and edges
@@ -248,7 +310,21 @@ class HashtagNetworkAnalyzer:
         return fig
     
     def plot_hashtag_distribution(self):
-        """Visualize hashtag usage distribution"""
+        """
+        Visualize hashtag usage distribution
+        
+        Creates a bar chart showing:
+        - Top 20 most frequently used hashtags
+        - Exact frequency count above each bar
+        - Rotated labels for better readability
+        - Custom figure size and layout
+        
+        Data source:
+        - Uses node_frequencies dictionary calculated during initialization
+        - Sorts hashtags by frequency before plotting
+        
+        Returns: Matplotlib figure showing hashtag frequency distribution
+        """      
         # Sort hashtags by frequency
         sorted_tags = sorted(self.node_frequencies.items(), 
                             key=lambda x: x[1], reverse=True)

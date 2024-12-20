@@ -1,3 +1,15 @@
+"""
+Threads Scraper Module
+
+This module provides functionality for scraping data from Threads.net.
+Features:
+- Error handling with custom exceptions
+- Rate limiting and retry logic
+- Configurable browser options
+- Session management and authentication
+- Anonymous access support
+"""
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -24,10 +36,36 @@ from concurrent.futures import ThreadPoolExecutor
 from config.config_manager import ConfigManager
 
 
-
 class ThreadsScraperException(Exception):
+    """
+    Custom exception class for handling Threads.net scraping errors
+    
+    Provides detailed error messages for different types of failures:
+    - Network errors (timeouts, connection issues)
+    - Authentication errors
+    - Page structure changes
+    - Element interaction failures
+    """
+    
     def handle_http_error(self, url, error):
-        """Handle HTTP-related errors and provide meaningful messages"""
+        """
+        Handle HTTP-related errors with specific error messages
+        
+        Args:
+            url (str): The URL being accessed when the error occurred
+            error (Exception): The original exception that was raised
+            
+        Raises:
+            ThreadsScraperException: With a detailed error message based on the error type
+            
+        Note:
+            Handles various network-related errors including:
+            - Timeouts
+            - DNS resolution failures
+            - Connection refusals
+            - Proxy errors
+            - Redirect loops
+        """
         error_msg = str(error)
         
         if isinstance(error, TimeoutException):
@@ -35,6 +73,7 @@ class ThreadsScraperException(Exception):
                 f"Timeout while accessing {url}. The server took too long to respond."
             )
         elif isinstance(error, WebDriverException):
+            # Handle different types of network errors
             if "net::ERR_CONNECTION_TIMED_OUT" in error_msg:
                 raise ThreadsScraperException(
                     f"Connection timed out while accessing {url}. Please check your internet connection."
@@ -71,7 +110,21 @@ class ThreadsScraperException(Exception):
         raise ThreadsScraperException(f"Unexpected error while accessing {url}: {error_msg}")
     
     def check_connection(self, url):
-        """Check if the website is accessible"""
+        """
+        Check if the website is accessible
+        
+        Args:
+            url (str): URL to check
+            
+        Returns:
+            bool: True if the website is accessible
+            
+        Raises:
+            ThreadsScraperException: If the website cannot be accessed
+            
+        Note:
+            Uses configured timeouts and waits for body element
+        """
         try:
             self.driver.get(url)
             self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
@@ -80,11 +133,34 @@ class ThreadsScraperException(Exception):
             self.handle_http_error(url, e)
     
     def rate_limit(self):
+        """
+        Implement rate limiting between requests
+        
+        Uses configured delays to:
+        - Prevent detection as a bot
+        - Respect server rate limits
+        - Add randomization to request timing
+        """
         delays = self.config.get_delays()
         delay = random.uniform(delays['min_wait'], delays['max_wait'])
         time.sleep(delay)
 
     def retry_with_backoff(self, func, *args):
+        """
+        Retry a function with exponential backoff
+        
+        Args:
+            func (callable): Function to retry
+            *args: Arguments to pass to the function
+            
+        Returns:
+            Any: Result of the successful function call
+            
+        Note:
+            - Uses exponential backoff between retries
+            - Configurable maximum attempts and initial delay
+            - Handles specific exceptions for retry logic
+        """
         retries = self.config.get_retries()
         for attempt in range(retries['max_attempts']):
             try:
@@ -98,8 +174,38 @@ class ThreadsScraperException(Exception):
     pass
 
 class ThreadsScraper:
+    """
+    Main scraper class for Threads.net
+    
+    Handles:
+    - Browser initialization and configuration
+    - Authentication and session management
+    - Content scraping and parsing
+    - Rate limiting and retry logic
+    
+    Attributes:
+        base_url (str): Base URL for Threads.net
+        chrome_options (Options): Configured Chrome browser options
+        is_logged_in (bool): Current login status
+        config (ConfigManager): Configuration manager instance
+    """
     
     def __init__(self, base_url, chromedriver):
+        """
+        Initialize the ThreadsScraper
+        
+        Args:
+            base_url (str): Base URL for Threads.net
+            chromedriver (str): Path to chromedriver executable
+            
+        Note:
+            - Loads configuration from ConfigManager
+            - Sets up browser options including:
+                - Window size
+                - Incognito mode
+                - User agent rotation
+                - Feature toggles
+        """
         self.config = ConfigManager()
         self.base_url = base_url
         self.chrome_options = Options()
@@ -109,18 +215,21 @@ class ThreadsScraper:
         browser_options = self.config.get_browser_options()
         window_size = browser_options.get('window_size', {'width': 1920, 'height': 1080})
         
+        # Enable incognito mode for clean sessions
         self.chrome_options.add_argument('--incognito')
 
-        # Apply browser options
+        # Apply browser options from configuration
         if browser_options.get('headless', False):
             self.chrome_options.add_argument('--headless=new')
             
+        # Disable specified features for better performance
         for feature in browser_options.get('disabled_features', []):
             self.chrome_options.add_argument(f'--disable-{feature}')
             
+        # Set window size for consistent rendering
         self.chrome_options.add_argument(f'--window-size={window_size["width"]},{window_size["height"]}')
         
-        # Set user agent
+        # Rotate user agents to avoid detection
         user_agents = self.config.get_user_agents()
         if user_agents:
             self.chrome_options.add_argument(f'--user-agent={random.choice(user_agents)}')
@@ -131,13 +240,36 @@ class ThreadsScraper:
         self.wait = WebDriverWait(self.driver, timeouts['element_wait'])
         
     def login(self, username, password):
-        """Log into Threads using Instagram credentials with improved error handling"""
+        """
+        Log into Threads using Instagram credentials or handle anonymous access
+        
+        Args:
+            username (str, optional): Instagram username
+            password (str, optional): Instagram password
+            
+        Returns:
+            bool: True if login successful, False otherwise
+            
+        Note:
+            - Handles both authenticated and anonymous access
+            - Manages cookie consent popups
+            - Provides detailed error handling
+            - Saves screenshots on failure for debugging
+        """
         if self.is_logged_in:
             return True
 
         try:
-            # Handle cookies popup
+            # Handle cookies popup with retry logic
             def handle_cookies():
+                """
+                Handle the cookie consent popup
+                
+                Attempts to find and click the accept button with:
+                - Explicit wait for button presence
+                - JavaScript click fallback
+                - Screenshot capture on failure
+                """
                 try:
                     print("Looking for the Accept Cookies button...")
                     accept_cookies_button = self.wait.until(
@@ -153,7 +285,7 @@ class ThreadsScraper:
                     print(f"Could not find or click the Accept Cookies button: {str(e)}")
                     self.driver.save_screenshot("accept_cookies_error.png")
 
-            # Check if credentials are provided
+            # Handle anonymous access if no credentials provided
             if username is None or password is None:
                 print("Attempting anonymous access...")
                 try:
@@ -161,7 +293,7 @@ class ThreadsScraper:
                 except WebDriverException as e:
                     raise ThreadsScraperException().handle_http_error(self.base_url + "/login/", e)
 
-                time.sleep(2)
+                time.sleep(2)  # Allow page to stabilize
                 handle_cookies()
 
                 try:
@@ -182,16 +314,17 @@ class ThreadsScraper:
                     self.driver.save_screenshot("use_without_profile_error.png")
                     return False
 
+            # Handle authenticated login
             print("Attempting to log in...")
             try:
                 self.driver.get(self.base_url + "/login/?show_choice_screen=false")
             except WebDriverException as e:
                 raise ThreadsScraperException().handle_http_error(self.base_url + "/login/", e)
 
-            time.sleep(2)
+            time.sleep(2)  # Allow page to stabilize
             handle_cookies()
 
-            # Navigate to the login form
+            # Navigate through login form
             try:
                 login_div = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'Log in')]")))
                 self.driver.execute_script("arguments[0].scrollIntoView(true);", login_div)
@@ -206,7 +339,7 @@ class ThreadsScraper:
                     "Could not click the login button. It might be covered by another element."
                 )
 
-            # Fill in username
+            # Fill in login credentials
             try:
                 print("Waiting for login form...")
                 username_input = self.wait.until(
@@ -215,7 +348,7 @@ class ThreadsScraper:
                 print("Found username input")
                 username_input.clear()
                 username_input.send_keys(username)
-                time.sleep(1)
+                time.sleep(1)  # Allow input to register
             except TimeoutException:
                 raise ThreadsScraperException(
                     "Timeout while waiting for username input. The login form may not have loaded properly."
@@ -278,12 +411,33 @@ class ThreadsScraper:
         return False
     
     def fetch_multiple_profiles(self, usernames, max_workers=5):
+        """
+        Fetch data for multiple profiles concurrently
+        
+        Args:
+            usernames (list): List of usernames to fetch
+            max_workers (int): Maximum number of concurrent workers
+            
+        Returns:
+            dict: Combined profile data from all usernames
+        """
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             results = executor.map(self.fetch_profile, usernames)
         return {k: v for result in results for k, v in result.items()}
     
     def extract_post_data(self, post_element):
-        """Extract data from a post element"""
+        """
+        Extract data from a post element
+        
+        Args:
+            post_element (bs4.element.Tag): BeautifulSoup element representing a post
+            
+        Returns:
+            dict: Extracted post data including:
+                - Text content
+                - Date posted
+                - Metadata
+        """
         try:
             # Find the main text container without relying on specific class names
             text_container = post_element.find('div', recursive=False)
@@ -305,7 +459,17 @@ class ThreadsScraper:
             return None
 
     def extract_reply_data(self, reply_element):
-        """Extract data from a reply element including both original post and reply"""
+        """
+        Extract data from a reply element including both original post and reply
+        
+        Args:
+            reply_element (bs4.element.Tag): BeautifulSoup element representing a reply
+            
+        Returns:
+            dict: Extracted reply data including:
+                - Original post data
+                - Reply data
+        """
         try:
             # Find all divs that could contain post content
             content_divs = reply_element.find_all('div', attrs={"data-pressable-container":"true"})
@@ -350,7 +514,18 @@ class ThreadsScraper:
             return None
 
     def extract_repost_data(self, repost_element):
-        """Extract data from a repost element"""
+        """
+        Extract data from a repost element
+        
+        Args:
+            repost_element (bs4.element.Tag): BeautifulSoup element representing a repost
+            
+        Returns:
+            dict: Extracted repost data including:
+                - Text content
+                - Date posted
+                - Metadata
+        """
         try:
             # Find the main text container without relying on specific class names 
             text_container = repost_element.find('div', recursive=False)
@@ -374,7 +549,17 @@ class ThreadsScraper:
         return None
 
     def extract_follower_data(self, follower_element):
-        """Extract username and display name from a follower element using robust selectors"""
+        """
+        Extract username and display name from a follower element using robust selectors
+        
+        Args:
+            follower_element (bs4.element.Tag): BeautifulSoup element representing a follower
+            
+        Returns:
+            dict: Extracted follower data including:
+                - Username
+                - Display name
+        """
         try:
             # Find link with role="link" and get the username from href
             link = follower_element.find('a', attrs={'role': 'link'})
@@ -404,7 +589,15 @@ class ThreadsScraper:
             return None
 
     def clean_and_extract_metadata(self, text_element):
-        """Cleans text and extracts metadata"""
+        """
+        Cleans text and extracts metadata
+        
+        Args:
+            text_element (bs4.element.Tag): BeautifulSoup element representing text to clean
+            
+        Returns:
+            tuple: Cleaned text and extracted metadata
+        """
         if not text_element:
             return "", ""
 
@@ -428,7 +621,19 @@ class ThreadsScraper:
         return cleaned_text.strip(), metadata.strip()
 
     def scroll_and_collect_content(self, content_type='posts'):
-        """Scroll and collect content with progress tracking"""
+        """Scroll and collect content with progress tracking
+        
+        Args:
+            content_type (str): Type of content to collect ('posts', 'replies', 'reposts', 'followers', 'following')
+            
+        Returns:
+            dict: Collected content including:
+                - Post data
+                - Reply data
+                - Repost data
+                - Follower data
+                - Following data
+        """
         print(f"Starting to collect {content_type}...")
         previous_content_count = 0
         same_count_iterations = 0
@@ -522,6 +727,19 @@ class ThreadsScraper:
         return collected_content
 
     def fetch_profile(self, username):
+        """
+        Fetch profile data for a given username
+        
+        Args:
+            username (str): Username to fetch
+            
+        Returns:
+            dict: Profile data including:
+                - Basic info (bio, name, etc.)
+                - Post data
+                - Follower/following counts
+                - Engagement metrics
+        """ 
         url = f"{self.base_url}/@{username}"
         profile_data = {
             "username": username,
