@@ -181,7 +181,7 @@ python main.py all
 ```
 Only scrape data.
 
-[![asciicast](https://asciinema.org/a/aNYVMZytuXozaz720F1GTtuiD.svg)](https://asciinema.org/a/aNYVMZytuXozaz720F1GTtuiD)
+[![asciicast](https://asciinema.org/a/EcPlp8k3V6zogigfZDRpa9WOK.svg)](https://asciinema.org/a/EcPlp8k3V6zogigfZDRpa9WOK)
 
 ```bash
 python main.py scrape  
@@ -193,9 +193,11 @@ Only analyze existing data.
 ```bash
 python main.py analyze 
 ```
+
 Generate visualizations.
 
 [![asciicast](https://asciinema.org/a/GBQ3sCzdF1umULSR6gbrG6Wvm.svg)](https://asciinema.org/a/GBQ3sCzdF1umULSR6gbrG6Wvm)
+
 ```bash
 python main.py visualize 
 ```
