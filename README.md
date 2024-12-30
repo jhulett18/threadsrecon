@@ -214,13 +214,13 @@ data/
 Common issues and solutions:
 
   1. ChromeDriver version mismatch
-    ```bash
+
     Error: "ChromeDriver only supports Chrome version XX"
     Solution: Download matching ChromeDriver version from https://sites.google.com/chromium.org/driver/downloads
-    ```
+    
 
   2. Authentication Issues
-    ```bash
+
     Error: "Account requires additional verification"
     Solution: Log into Instagram manually first and complete verification
     
@@ -229,10 +229,9 @@ Common issues and solutions:
     
     Error: "Account has been temporarily blocked"
     Solution: Wait for the block to expire or use anonymous access
-    ```
 
   3. Network and Connection Issues
-    ```bash
+
     Error: "Connection timed out while accessing threads.net"
     Solution: Check your internet connection and try again
     
@@ -244,10 +243,9 @@ Common issues and solutions:
     
     Error: "Proxy connection failed"
     Solution: Check your proxy settings or disable proxy
-    ```
 
   4. Scraping Issues
-    ```bash
+
     Error: "Required element not found"
     Solution: The page structure might have changed. Update selectors
     
@@ -256,43 +254,39 @@ Common issues and solutions:
     
     Error: "Could not interact with element"
     Solution: Element might be covered. Try running in non-headless mode
-    ```
 
   5. Data Processing Issues
-    ```bash
+
     Error: "Module not found"
     Solution: Run `pip install -r requirements.txt`
     
     Error: "Failed to process sentiment analysis"
     Solution: Run `python -c "import nltk; nltk.download('vader_lexicon')"`
-    ```
 
   6. Report Generation Issues
-    ```bash
+
     Error: "wkhtmltopdf not found"
     Solution: Install wkhtmltopdf and update path in settings.yaml
     
     Error: "Failed to generate PDF"
     Solution: Check write permissions in output directory
-    ```
 
   7. Warning System Issues
-    ```bash
+
     Error: "Failed to send Telegram alert"
     Solution: Verify bot token and chat ID in settings.yaml
     
     Error: "Message too long"
     Solution: Alerts are automatically truncated to 200 characters
-    ```
 
   8. Configuration Issues
-    ```bash
+
     Error: "Invalid settings"
     Solution: Validate settings.yaml against example configuration
     
     Error: "Missing required field"
     Solution: Check all required fields are present in settings.yaml
-    ```
+    
 
   For persistent issues:
   1. Check the logs in the `data` directory
