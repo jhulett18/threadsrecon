@@ -39,7 +39,12 @@ This tool is designed to scrape, analyze, visualize data, and generate reports f
 ## Installation
 ### Generic
 Install [chromedriver](https://sites.google.com/chromium.org/driver/downloads) for your chrome version and OS.
-### macOS (via [homebrew](https://brew.sh/))
+
+Crate your [Telegram bot](https://core.telegram.org/bots/tutorial) and obtain your bot token and chat ID.
+
+Install [wkhtmltopdf](https://wkhtmltopdf.org/downloads.html) for your OS.
+
+#### macOS chromedriver (via [homebrew](https://brew.sh/))
 ```bash
 brew install chromedriver
 xattr -d com.apple.quarantine /opt/homebrew/bin/chromedriver
@@ -48,12 +53,9 @@ Install the required libraries for python:
 ```bash
 python3 -m pip install -r requirements.txt
 ```
-Crate your [Telegram bot](https://core.telegram.org/bots/tutorial) and obtain your bot token and chat ID.
-
-Install [wkhtmltopdf](https://wkhtmltopdf.org/downloads.html) for your OS.
 
 ### Docker Installation
-Install Docker.
+Install [Docker](https://docs.docker.com/engine/install/).
 
 Build the container.
 ```bash
@@ -64,6 +66,10 @@ Run the container.
 docker run -v $(pwd)/data:/app/data threadsrecon
 ```
 ## Quick Start
+
+[![asciicast](https://asciinema.org/a/4IH82ksSaoTgUd23ex4yCu2aX.svg)](https://asciinema.org/a/4IH82ksSaoTgUd23ex4yCu2aX)
+
+
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/threadsrecon.git
@@ -73,8 +79,8 @@ cd threadsrecon
 python3 -m pip install -r requirements.txt
 
 # Create and configure settings.yaml
-cp settings.example.yaml settings.yaml
-nano settings.yaml  # Edit with your settings
+touch settings.yaml
+nano settings.yaml  #Paste and edit with your settings
 
 # Run the tool
 python main.py all
@@ -174,18 +180,29 @@ Run complete pipeline.
 python main.py all 
 ```
 Only scrape data.
+
+[![asciicast](https://asciinema.org/a/aNYVMZytuXozaz720F1GTtuiD.svg)](https://asciinema.org/a/aNYVMZytuXozaz720F1GTtuiD)
+
 ```bash
 python main.py scrape  
 ```
 Only analyze existing data.
+
+[![asciicast](https://asciinema.org/a/rluNgGGNPNoXkW4p8i5DGVuNB.svg)](https://asciinema.org/a/rluNgGGNPNoXkW4p8i5DGVuNB)
+
 ```bash
 python main.py analyze 
 ```
 Generate visualizations.
+
+[![asciicast](https://asciinema.org/a/GBQ3sCzdF1umULSR6gbrG6Wvm.svg)](https://asciinema.org/a/GBQ3sCzdF1umULSR6gbrG6Wvm)
 ```bash
 python main.py visualize 
 ```
 Create PDF report.
+
+[![asciicast](https://asciinema.org/a/D0pvtyG3VPtvM1fWEMuVoBSlV.svg)](https://asciinema.org/a/D0pvtyG3VPtvM1fWEMuVoBSlV)
+
 ```bash
 python main.py report  
 ```

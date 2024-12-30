@@ -303,7 +303,7 @@ class ThreadsScraper:
                     )
                     use_without_profile_button.click()
                     print("Successfully selected 'Use without a profile'")
-                    self.is_logged_in = True
+                    self.is_logged_in = False
                     return True
                 except TimeoutException:
                     raise ThreadsScraperException(
@@ -830,82 +830,89 @@ class ThreadsScraper:
             except Exception as e:
                 print(f"Instagram link not found: {str(e)}")
                 profile_data['instagram'] = "Instagram link not found"
-
+            
             #Collect followers
-            try:
-                # First try to get the count from the profile page
-                followers_count_elem = self.driver.find_element(By.XPATH, '//span[@dir="auto"][contains(text(), " followers")]')
-                displayed_followers_count = followers_count_elem.text.strip().replace('followers', '').strip()
-                
-                # Click to open followers window
-                followers_count_elem.click()
-                time.sleep(2)
-                
-                # Collect followers data
-                followers = self.scroll_and_collect_content('followers')
-                actual_followers_count = len(followers)
-                
-                # Use the actual count from collected data
-                profile_data['followers_count'] = str(actual_followers_count)
-                profile_data['followers'] = followers
-                
-                # Log if there's a discrepancy
-                if actual_followers_count != int(displayed_followers_count.replace(',', '')):
-                    print(f"Warning: Followers count mismatch - Display: {displayed_followers_count}, Actual: {actual_followers_count}")
-
-                #Collect following
+            if self.is_logged_in:
                 try:
                     # First try to get the count from the profile page
-                    following_container = self.driver.find_element(By.XPATH,'//span[@dir="auto"][contains(text(), "Following")]')
-                    following_count_elem = self.driver.find_element(By.XPATH, '//div[@aria-label="Following"]//span[@title]')
-                    displayed_following_count = following_count_elem.get_attribute('title')
+                    followers_count_elem = self.driver.find_element(By.XPATH, '//span[@dir="auto"][contains(text(), " followers")]')
+                    displayed_followers_count = followers_count_elem.text.strip().replace('followers', '').strip()
                     
-                    # Click to open following window
-                    following_container.click()
+                    # Click to open followers window
+                    followers_count_elem.click()
                     time.sleep(2)
                     
-                    # Collect following data
-                    following = self.scroll_and_collect_content('following')
-                    actual_following_count = len(following)
+                    # Collect followers data
+                    followers = self.scroll_and_collect_content('followers')
+                    actual_followers_count = len(followers)
                     
                     # Use the actual count from collected data
-                    profile_data['following_count'] = str(actual_following_count)
-                    profile_data['following'] = following
+                    profile_data['followers_count'] = str(actual_followers_count)
+                    profile_data['followers'] = followers
                     
                     # Log if there's a discrepancy
-                    if actual_following_count != int(displayed_following_count.replace(',', '')):
-                        print(f"Warning: Following count mismatch - Display: {displayed_following_count}, Actual: {actual_following_count}")
-                    
-                except Exception as e:
-                    print(f"Error collecting following data: {str(e)}")
-                    profile_data['following_count'] = "Following count not found"
-                    profile_data['following'] = {}
+                    if actual_followers_count != int(displayed_followers_count.replace(',', '')):
+                        print(f"Warning: Followers count mismatch - Display: {displayed_followers_count}, Actual: {actual_followers_count}")
 
-                # Try multiple methods to close the window
-                try:
-                    # Method 1: ActionChains
-                    actions = ActionChains(self.driver)
-                    actions.send_keys(Keys.ESCAPE).perform()
-                    time.sleep(1) 
-                    
-                    # If that didn't work, try Method 2: Direct to body
-                    if len(self.driver.find_elements(By.XPATH, "//div[contains(@role, 'dialog')]")) > 0:
-                        self.driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
-                        time.sleep(1)
+                    #Collect following
+                    try:
+                        # First try to get the count from the profile page
+                        following_container = self.driver.find_element(By.XPATH,'//span[@dir="auto"][contains(text(), "Following")]')
+                        following_count_elem = self.driver.find_element(By.XPATH, '//div[@aria-label="Following"]//span[@title]')
+                        displayed_following_count = following_count_elem.get_attribute('title')
                         
-                    # If still open, try Method 3: Click close button if it exists
-                    if len(self.driver.find_elements(By.XPATH, "//div[contains(@role, 'dialog')]")) > 0:
-                        close_button = self.driver.find_element(By.XPATH, "//button[@aria-label='Close' or contains(@class, 'close')]")
-                        close_button.click()
+                        # Click to open following window
+                        following_container.click()
+                        time.sleep(2)
                         
-                except Exception as e:
-                    print(f"Error closing window: {e}")
+                        # Collect following data
+                        following = self.scroll_and_collect_content('following')
+                        actual_following_count = len(following)
+                        
+                        # Use the actual count from collected data
+                        profile_data['following_count'] = str(actual_following_count)
+                        profile_data['following'] = following
+                        
+                        # Log if there's a discrepancy
+                        if actual_following_count != int(displayed_following_count.replace(',', '')):
+                            print(f"Warning: Following count mismatch - Display: {displayed_following_count}, Actual: {actual_following_count}")
+                        
+                    except Exception as e:
+                        print(f"Error collecting following data: {str(e)}")
+                        profile_data['following_count'] = "Following count not found"
+                        profile_data['following'] = {}
 
-            except Exception as e:
-                print(f"Error collecting followers data: {str(e)}")
-                profile_data['followers_count'] = "Followers not found"
+                    # Try multiple methods to close the window
+                    try:
+                        # Method 1: ActionChains
+                        actions = ActionChains(self.driver)
+                        actions.send_keys(Keys.ESCAPE).perform()
+                        time.sleep(1) 
+                        
+                        # If that didn't work, try Method 2: Direct to body
+                        if len(self.driver.find_elements(By.XPATH, "//div[contains(@role, 'dialog')]")) > 0:
+                            self.driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
+                            time.sleep(1)
+                            
+                        # If still open, try Method 3: Click close button if it exists
+                        if len(self.driver.find_elements(By.XPATH, "//div[contains(@role, 'dialog')]")) > 0:
+                            close_button = self.driver.find_element(By.XPATH, "//button[@aria-label='Close' or contains(@class, 'close')]")
+                            close_button.click()
+                            
+                    except Exception as e:
+                        print(f"Error closing window: {e}")
+
+                except Exception as e:
+                    print(f"Error collecting followers data: {str(e)}")
+                    profile_data['followers_count'] = "Followers not found"
+                    profile_data['followers'] = {}
+            else:
+                print("Skipping followers/following collection - not logged in")
+                profile_data['followers_count'] = "Login required"
+                profile_data['following_count'] = "Login required"
                 profile_data['followers'] = {}
-
+                profile_data['following'] = {}
+            
                 
             
             # Collect posts

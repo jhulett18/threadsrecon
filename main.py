@@ -17,6 +17,7 @@ import json
 import asyncio
 import argparse
 import pandas as pd
+import plotly.graph_objects as go
 from scraping.scraper import ThreadsScraper
 from analysis.sentiment_analysis import analyze_sentiment_nltk, process_posts
 from processing.data_processing import DataProcessor
@@ -181,25 +182,13 @@ def visualize_all(config):
         'hashtag_dist': (analyzer.plot_hashtag_distribution(), config["AnalysisSettings"]["hashtag_dist_plot"])
     }
     
-    # Generate other visualizations
-    sentiment_plot = analyzer.plot_sentiment_trends(combined_df)
-    engagement_plot = analyzer.plot_engagement_metrics(combined_df)
-    mutual_followers_plot = analyzer.plot_mutual_followers_network(processor.data)
-    hashtag_dist_plot = analyzer.plot_hashtag_distribution()
-    
-    # Save the visualizations
-    if static_fig:
-        static_fig.savefig(config["AnalysisSettings"]["hashtag_network_static"])
-    if interactive_fig:
-        interactive_fig.write_html(config["AnalysisSettings"]["hashtag_network_interactive"])
-    if sentiment_plot:
-        sentiment_plot.savefig(config["AnalysisSettings"]["sentiment_plot"])
-    if engagement_plot:
-        engagement_plot.savefig(config["AnalysisSettings"]["engagement_plot"])
-    if mutual_followers_plot:
-        mutual_followers_plot.savefig(config["AnalysisSettings"]["mutual_followers_plot"])
-    if hashtag_dist_plot:
-        hashtag_dist_plot.savefig(config["AnalysisSettings"]["hashtag_dist_plot"])
+    # Save all visualizations
+    for (fig, output_path) in visualizations.values():
+        if fig:
+            if isinstance(fig, go.Figure):  # Plotly figure
+                fig.write_html(output_path)
+            else:  # Matplotlib figure
+                fig.savefig(output_path)
     
     # Print strongest connections
     edge_weights = sorted(
