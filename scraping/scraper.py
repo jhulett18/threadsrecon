@@ -757,7 +757,8 @@ class ThreadsScraper:
             "replies_count": 0,
             "replies": {},
             "reposts_count": 0,
-            "reposts": {}
+            "reposts": {},
+            "is_private": False
         }
         try:
             # Add retry logic
@@ -781,7 +782,56 @@ class ThreadsScraper:
             if "Page not found" in self.driver.title or "Error" in self.driver.title:
                 raise ThreadsScraperException(f"Profile not found or unavailable: {username}")
             soup = BeautifulSoup(self.driver.page_source, 'html.parser')    
-            
+             # Check if profile is private
+            try:
+                private_message = self.driver.find_element(By.XPATH, "//span[contains(text(), 'This profile is private.')]")
+                if private_message:
+                    print(f"Profile {username} is private. Skipping detailed data collection.")
+                    profile_data["is_private"] = True
+                    
+                    # Still collect basic profile info that's visible
+                    soup = BeautifulSoup(self.driver.page_source, 'html.parser')    
+                    
+                    # Get name if available
+                    name = soup.find('h1', {"dir": "auto"})
+                    if name:
+                        profile_data['name'] = name.get_text(strip=True)
+                    
+                    # Get profile picture if available
+                    profile_picture = soup.find('meta',{'property':'og:image'})
+                    if profile_picture:
+                        image_url = profile_picture.get('content')
+                        if image_url:
+                            profile_data['profile_picture'] = image_url
+                    try:
+                        instagram = self.driver.find_element(By.XPATH, '//a[contains(@href, "threads.net") and contains(@href, "instagram.com")]')
+                        if instagram:
+                            instagram_url = instagram.get_attribute('href')
+                            if 'u=' in instagram_url:
+                                parsed_url = urlparse(instagram_url)
+                                query_params = parse_qs(parsed_url.query)
+                                instagram_url = query_params.get('u', [None])[0]
+                                if instagram_url:
+                                    profile_data['instagram'] = unquote(instagram_url)
+                                else:
+                                    profile_data['instagram'] = "Instagram URL not found in 'u' parameter"
+                            else:
+                                profile_data['instagram'] = instagram_url
+                    except Exception as e:
+                        print(f"Instagram link not found: {str(e)}")
+                        profile_data['instagram'] = "Instagram link not found"
+                    
+                
+                    followers_count_elem = self.driver.find_element(By.XPATH, '//span[@dir="auto"][contains(text(), " followers")]')
+                    profile_data['followers_count'] = followers_count_elem.text.strip().replace('followers', '').strip()
+                    
+                    return {username: profile_data}
+
+
+            except NoSuchElementException:
+                # Profile is not private, continue with normal scraping
+                pass
+                
             name = soup.find('h1', {"dir": "auto"})
             if name:
                 profile_data['name'] = name.get_text(strip=True)
