@@ -54,17 +54,6 @@ Install the required libraries for python:
 python3 -m pip install -r requirements.txt
 ```
 
-### Docker Installation
-Install [Docker](https://docs.docker.com/engine/install/).
-
-Build the container.
-```bash
-docker build -t threadsrecon .
-```
-Run the container.
-```bash
-docker run -v $(pwd)/data:/app/data threadsrecon
-```
 ## Quick Start
 
 [![asciicast](https://asciinema.org/a/4IH82ksSaoTgUd23ex4yCu2aX.svg)](https://asciinema.org/a/4IH82ksSaoTgUd23ex4yCu2aX)
@@ -72,7 +61,7 @@ docker run -v $(pwd)/data:/app/data threadsrecon
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/threadsrecon.git
+git clone https://github.com/offseq/threadsrecon.git
 cd threadsrecon
 
 # Install dependencies
