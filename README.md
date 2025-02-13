@@ -128,12 +128,7 @@ AnalysisSettings:
  input_file: data/profiles.json
  archive_file: data/archived_profiles.json
  output_file: data/analyzed_profiles.json
- hashtag_network_static: data/visualizations/hashtag_network_static.png
- hashtag_network_interactive: data/visualizations/hashtag_network_interactive.html 
- sentiment_plot: data/visualizations/sentiment_analysis.png
- engagement_plot: data/visualizations/engagement_metrics.png
- mutual_followers_plot: data/visualizations/mutual_followers.png
- hashtag_dist_plot: data/visualizations/hashtag_distribution.png
+ visualization_dir: data/visualizations
  keywords: 
   - keyword1
   - keyword2
@@ -206,8 +201,15 @@ data/
 ├── archived_profiles.json  # Archived data
 ├── visualizations/
 │   ├── hashtag_network.png
-│   ├── sentiment_plot.png
-│   └── engagement_metrics.png
+│   ├── hashtag_network.html
+│   ├── sentiment.png
+│   ├── sentiment.html
+│   ├── engagement.png
+│   ├── engagement.html
+│   ├── mutual_followers.png
+│   ├── mutual_followers.html
+│   ├── hashtag_dist.png
+│   └── hashtag_dist.html
 └── reports/
     └── report_YYYY-MM-DD.pdf
 ```

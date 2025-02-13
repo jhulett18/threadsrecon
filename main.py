@@ -24,6 +24,9 @@ from processing.data_processing import DataProcessor
 from reports.report_generator import GenerateReport
 from visualization.visualization import HashtagNetworkAnalyzer
 from datetime import datetime
+import glob
+import matplotlib.pyplot as plt
+import plotly.io as pio
 
 # Ensure we're running from the correct directory
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -144,17 +147,12 @@ def visualize_all(config):
     
     Args:
         config (dict): Configuration containing visualization settings
-    
-    Creates:
-    1. Hashtag network visualizations (static and interactive)
-    2. Sentiment trends plot
-    3. Engagement metrics plot
-    4. Mutual followers network plot
-    5. Hashtag distribution plot
-    
-    Also prints the strongest hashtag connections found in the data
     """
     processor = DataProcessor(config["AnalysisSettings"]["input_file"])
+    
+    # Get visualization directory from config
+    viz_dir = config["AnalysisSettings"]["visualization_dir"]
+    os.makedirs(viz_dir, exist_ok=True)
     
     # Combine all posts data into a single DataFrame
     all_posts_data = []
@@ -172,23 +170,32 @@ def visualize_all(config):
     # Initialize analyzer and generate visualizations
     analyzer = HashtagNetworkAnalyzer(combined_df)
     
-    # Generate and save all visualizations
+    # Generate and save all visualizations with standardized naming
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Save all figures
     visualizations = {
-        'static_network': (analyzer.plot_matplotlib(), config["AnalysisSettings"]["hashtag_network_static"]),
-        'interactive_network': (analyzer.plot_plotly(), config["AnalysisSettings"]["hashtag_network_interactive"]),
-        'sentiment': (analyzer.plot_sentiment_trends(combined_df), config["AnalysisSettings"]["sentiment_plot"]),
-        'engagement': (analyzer.plot_engagement_metrics(combined_df), config["AnalysisSettings"]["engagement_plot"]),
-        'mutual_followers': (analyzer.plot_mutual_followers_network(processor.data), config["AnalysisSettings"]["mutual_followers_plot"]),
-        'hashtag_dist': (analyzer.plot_hashtag_distribution(), config["AnalysisSettings"]["hashtag_dist_plot"])
+        'hashtag_network': analyzer.plot_plotly(),
+        'sentiment': analyzer.plot_sentiment_trends(combined_df),
+        'engagement': analyzer.plot_engagement_metrics(combined_df),
+        'mutual_followers': analyzer.plot_mutual_followers_network(processor.data),
+        'hashtag_dist': analyzer.plot_hashtag_distribution()
     }
     
-    # Save all visualizations
-    for (fig, output_path) in visualizations.values():
+    for name, fig in visualizations.items():
         if fig:
-            if isinstance(fig, go.Figure):  # Plotly figure
-                fig.write_html(output_path)
-            else:  # Matplotlib figure
+            if isinstance(fig, plt.Figure):  # Matplotlib figure
+                output_path = os.path.join(viz_dir, f"{name}_{timestamp}.png")
                 fig.savefig(output_path)
+                plt.close(fig)
+            else:  # Plotly figure
+                # Save interactive HTML
+                html_path = os.path.join(viz_dir, f"{name}_{timestamp}.html")
+                fig.write_html(html_path)
+                
+                # Save static PNG
+                png_path = os.path.join(viz_dir, f"{name}_{timestamp}.png")
+                fig.write_image(png_path)
     
     # Print strongest connections
     edge_weights = sorted(
@@ -204,18 +211,7 @@ def visualize_all(config):
 def generate_report(config):
     """
     Generate a PDF report with all analysis results
-    
-    Args:
-        config (dict): Configuration containing report generation settings
-    
-    Creates:
-    - PDF report with timestamp in filename
-    - Includes all visualizations and analysis results
-    - Saves to configured output path
     """
-    from datetime import datetime
-    
-    # Create timestamp for filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = config["ReportGeneration"]["output_path"]
     
@@ -223,18 +219,26 @@ def generate_report(config):
     base, ext = os.path.splitext(output_path)
     output_path_with_timestamp = f"{base}_{timestamp}{ext}"
     
+    # Get the most recent visualization files
+    viz_dir = config["AnalysisSettings"]["visualization_dir"]
+    network_plot = max(glob.glob(os.path.join(viz_dir, "hashtag_network_*.png")), default=None)
+    sentiment_plot = max(glob.glob(os.path.join(viz_dir, "sentiment_*.html")), default=None)
+    engagement_plot = max(glob.glob(os.path.join(viz_dir, "engagement_*.html")), default=None)
+    mutual_followers_plot = max(glob.glob(os.path.join(viz_dir, "mutual_followers_*.html")), default=None)
+    hashtag_dist_plot = max(glob.glob(os.path.join(viz_dir, "hashtag_dist_*.png")), default=None)
+    
     report = GenerateReport()
-    report.create_report(config["AnalysisSettings"]["output_file"],
-                        config["ReportGeneration"]["path_to_wkhtmltopdf"],
-                        config["AnalysisSettings"]["hashtag_network_static"],
-                        config["AnalysisSettings"]["sentiment_plot"],
-                        config["AnalysisSettings"]["engagement_plot"],
-                        config["AnalysisSettings"]["mutual_followers_plot"],
-                        config["AnalysisSettings"]["hashtag_dist_plot"],
-                        output_path_with_timestamp
-                        )
-    
-    
+    report.create_report(
+        config["AnalysisSettings"]["output_file"],
+        config["ReportGeneration"]["path_to_wkhtmltopdf"],
+        network_plot,
+        sentiment_plot,
+        engagement_plot,
+        mutual_followers_plot,
+        hashtag_dist_plot,
+        output_path_with_timestamp
+    )
+
 async def analyze_data(config):
     """
     Handle the analysis functionality with warning system integration
