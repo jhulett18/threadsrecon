@@ -289,6 +289,42 @@ async def analyze_data(config):
     else:
         print("No data to process.")
 
+def display_ascii_art(command):
+    """
+    Display ASCII art based on the command being executed
+    
+    Args:
+        command (str): The command being executed
+    """
+    art = {
+        "scrape": """
+    ╔═╗┌─┐┬─┐┌─┐┌─┐┌─┐┬─┐
+    ╚═╗│  ├┬┘├─┤├─┘├┤ ├┬┘
+    ╚═╝└─┘┴└─┴ ┴┴  └─┘┴└─
+        """,
+        "analyze": """
+    ╔═╗┌┐┌┌─┐┬  ┬┌─┐┌─┐
+    ╠═╣│││├─┤│  │┌─┘├┤ 
+    ╩ ╩┘└┘┴ ┴┴─┘┴└─┘└─┘
+        """,
+        "visualize": """
+    ╦  ╦┬┌─┐┬ ┬┌─┐┬  ┬┌─┐┌─┐
+    ╚╗╔╝│└─┐│ │├─┤│  │┌─┘├┤ 
+     ╚╝ ┴└─┘└─┘┴ ┴┴─┘┴└─┘└─┘
+        """,
+        "report": """
+    ╦═╗┌─┐┌─┐┌─┐┬─┐┌┬┐
+    ╠╦╝├┤ ├─┘│ │├┬┘ │ 
+    ╩╚═└─┘┴  └─┘┴└─ ┴ 
+        """,
+        "all": """
+    ╔═╗┬  ┬  ┬
+    ╠═╣│  │  │
+    ╩ ╩┴─┘┴─┘┴─┘
+        """
+    }
+    print("\033[96m" + art.get(command, "") + "\033[0m")  # Cyan color with reset
+
 async def main():
     """
     Main entry point for the application
@@ -319,18 +355,22 @@ async def main():
     
     # Execute requested command
     if args.command == 'scrape' or args.command == 'all':
+        display_ascii_art('scrape')
         print("Starting data scraping...")
         scrape_data(config)
     
     if args.command == 'analyze' or args.command == 'all':
+        display_ascii_art('analyze')
         print("Starting data analysis...")
         await analyze_data(config)
     
     if args.command == 'visualize' or args.command == 'all':
+        display_ascii_art('visualize')
         print("Generating network visualization...")
         visualize_all(config)
         
     if args.command == 'report' or args.command == 'all':
+        display_ascii_art('report')
         print("Generating pdf report...")
         generate_report(config)
 
