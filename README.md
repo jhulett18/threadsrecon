@@ -74,6 +74,63 @@ nano settings.yaml  #Paste and edit with your settings
 # Run the tool
 python main.py all
 ```
+
+## Docker
+
+### Prerequisites
+- Docker installed
+- Docker Compose installed
+- 2GB RAM minimum (for Chrome in container)
+- Settings file configured (settings.yaml)
+
+### Installation & Usage
+1. Build the container:
+```bash
+docker-compose build
+```
+2. Run specific commands:
+```bash
+#Run complete pipeline
+docker-compose run threadsrecon all
+
+#Run scrape only
+docker-compose run threadsrecon scrape
+
+#Run analyze only
+docker-compose run threadsrecon analyze
+
+#Run visualize only
+docker-compose run threadsrecon visualize
+
+#Run report only
+docker-compose run threadsrecon report
+```
+3. Run with specific user permissions:
+```bash
+sudo -E UID=$(id -u) GID=$(id -g) docker-compose run threadsrecon all
+
+#Run scrape only
+sudo -E UID=$(id -u) GID=$(id -g) docker-compose run threadsrecon scrape
+
+#Run analyze only
+sudo -E UID=$(id -u) GID=$(id -g) docker-compose run threadsrecon analyze
+
+#Run visualize only
+sudo -E UID=$(id -u) GID=$(id -g) docker-compose run threadsrecon visualize
+
+#Run report only
+sudo -E UID=$(id -u) GID=$(id -g) docker-compose run threadsrecon report
+```
+### Docker Volume Mounts
+- `./settings.yaml:/app/settings.yaml:ro` (read-only configuration)
+- `./data:/app/data` (persistent data storage)
+
+### Environment Variables
+- `PYTHONUNBUFFERED=1` (unbuffered Python output)
+- `DISPLAY=:99` (for Chrome)
+- `UID` (container user ID)
+- `GID` (container group ID)
+
 ## Configuration
 ### Settings File Structure
 The `settings.yaml` file contains all configuration parameters. Key sections include:
@@ -93,7 +150,7 @@ Credentials:  # if not set, anonymous access will be used
 
 ScraperSettings:
   base_url: https://www.threads.net
-  chromedriver: ./chromedriver  # path to chromedriver
+  chromedriver: ./chromedriver  # path to chromedriver or /usr/local/bin/chromedriver for docker
   usernames:
     - target_username
     - target_username2
@@ -111,7 +168,7 @@ ScraperSettings:
     - 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
     - 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36'
   browser_options:
-    headless: false
+    headless: true # False for debugging
     window_size:
       width: 1920
       height: 1080
@@ -128,12 +185,7 @@ AnalysisSettings:
  input_file: data/profiles.json
  archive_file: data/archived_profiles.json
  output_file: data/analyzed_profiles.json
- hashtag_network_static: data/visualizations/hashtag_network_static.png
- hashtag_network_interactive: data/visualizations/hashtag_network_interactive.html 
- sentiment_plot: data/visualizations/sentiment_analysis.png
- engagement_plot: data/visualizations/engagement_metrics.png
- mutual_followers_plot: data/visualizations/mutual_followers.png
- hashtag_dist_plot: data/visualizations/hashtag_distribution.png
+ visualization_dir: data/visualizations
  keywords: 
   - keyword1
   - keyword2
@@ -159,6 +211,7 @@ WarningSystem:
       - "notice"
 
 ReportGeneration:
+# Docker environment path /usr/bin/wkhtmltopdf 
  path_to_wkhtmltopdf: your\path\to\wkhtmltopdf.exe # Example location: C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe
  output_path: data/reports/report.pdf
 ```
@@ -206,8 +259,15 @@ data/
 ├── archived_profiles.json  # Archived data
 ├── visualizations/
 │   ├── hashtag_network.png
-│   ├── sentiment_plot.png
-│   └── engagement_metrics.png
+│   ├── hashtag_network.html
+│   ├── sentiment.png
+│   ├── sentiment.html
+│   ├── engagement.png
+│   ├── engagement.html
+│   ├── mutual_followers.png
+│   ├── mutual_followers.html
+│   ├── hashtag_dist.png
+│   └── hashtag_dist.html
 └── reports/
     └── report_YYYY-MM-DD.pdf
 ```
@@ -294,6 +354,43 @@ Common issues and solutions:
     
     Error: "Missing required field"
     Solution: Check all required fields are present in settings.yaml
+    
+  9. Docker Issues
+
+    Error: "docker.errors.DockerException: Error while fetching server API version"
+    Solution: Ensure Docker daemon is running with `sudo systemctl start docker`
+    
+    Error: "Error response from daemon: OCI runtime create failed"
+    Solution: Ensure sufficient memory (2GB minimum) and check Docker permissions
+    
+    Error: "chrome_driver.exceptions.WebDriverException: unknown error: Chrome failed to start: crashed"
+    Solution: Add or increase shm-size in docker-compose.yml:
+    ```yaml
+    services:
+      threadsrecon:
+        shm_size: '2gb'
+    ```
+    
+    Error: "Permission denied: '/app/data'"
+    Solution: Run with correct UID/GID:
+    ```bash
+    sudo -E UID=$(id -u) GID=$(id -g) docker-compose run threadsrecon all
+    ```
+    
+    Error: "wkhtmltopdf not found"
+    Solution: In settings.yaml, set path_to_wkhtmltopdf to "/usr/bin/wkhtmltopdf"
+
+  10. Container Resource Issues
+
+    Error: "Container killed due to memory limit"
+    Solution: Increase Docker memory limit or reduce Chrome instances
+    
+    Error: "No space left on device"
+    Solution: Clean up unused Docker images and volumes:
+    ```bash
+    docker system prune -a
+    docker volume prune
+    ```
     
 
   For persistent issues:

@@ -24,6 +24,9 @@ from processing.data_processing import DataProcessor
 from reports.report_generator import GenerateReport
 from visualization.visualization import HashtagNetworkAnalyzer
 from datetime import datetime
+import glob
+import matplotlib.pyplot as plt
+import plotly.io as pio
 
 # Ensure we're running from the correct directory
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -144,17 +147,12 @@ def visualize_all(config):
     
     Args:
         config (dict): Configuration containing visualization settings
-    
-    Creates:
-    1. Hashtag network visualizations (static and interactive)
-    2. Sentiment trends plot
-    3. Engagement metrics plot
-    4. Mutual followers network plot
-    5. Hashtag distribution plot
-    
-    Also prints the strongest hashtag connections found in the data
     """
     processor = DataProcessor(config["AnalysisSettings"]["input_file"])
+    
+    # Get visualization directory from config
+    viz_dir = config["AnalysisSettings"]["visualization_dir"]
+    os.makedirs(viz_dir, exist_ok=True)
     
     # Combine all posts data into a single DataFrame
     all_posts_data = []
@@ -172,23 +170,27 @@ def visualize_all(config):
     # Initialize analyzer and generate visualizations
     analyzer = HashtagNetworkAnalyzer(combined_df)
     
-    # Generate and save all visualizations
+    # Generate and save all visualizations with standardized naming
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Save all figures in both HTML and PNG formats
     visualizations = {
-        'static_network': (analyzer.plot_matplotlib(), config["AnalysisSettings"]["hashtag_network_static"]),
-        'interactive_network': (analyzer.plot_plotly(), config["AnalysisSettings"]["hashtag_network_interactive"]),
-        'sentiment': (analyzer.plot_sentiment_trends(combined_df), config["AnalysisSettings"]["sentiment_plot"]),
-        'engagement': (analyzer.plot_engagement_metrics(combined_df), config["AnalysisSettings"]["engagement_plot"]),
-        'mutual_followers': (analyzer.plot_mutual_followers_network(processor.data), config["AnalysisSettings"]["mutual_followers_plot"]),
-        'hashtag_dist': (analyzer.plot_hashtag_distribution(), config["AnalysisSettings"]["hashtag_dist_plot"])
+        'hashtag_network': analyzer.plot_plotly(),
+        'sentiment': analyzer.plot_sentiment_trends(combined_df),
+        'engagement': analyzer.plot_engagement_metrics(combined_df),
+        'mutual_followers': analyzer.plot_mutual_followers_network(processor.data),
+        'hashtag_dist': analyzer.plot_hashtag_distribution()
     }
     
-    # Save all visualizations
-    for (fig, output_path) in visualizations.values():
+    for name, fig in visualizations.items():
         if fig:
-            if isinstance(fig, go.Figure):  # Plotly figure
-                fig.write_html(output_path)
-            else:  # Matplotlib figure
-                fig.savefig(output_path)
+            # Save PNG for report
+            png_path = os.path.join(viz_dir, f"{name}_{timestamp}.png")
+            fig.write_image(png_path, scale=2)  # Higher resolution for better quality
+            
+            # Save HTML for interactive viewing
+            html_path = os.path.join(viz_dir, f"{name}_{timestamp}.html")
+            fig.write_html(html_path)
     
     # Print strongest connections
     edge_weights = sorted(
@@ -204,18 +206,7 @@ def visualize_all(config):
 def generate_report(config):
     """
     Generate a PDF report with all analysis results
-    
-    Args:
-        config (dict): Configuration containing report generation settings
-    
-    Creates:
-    - PDF report with timestamp in filename
-    - Includes all visualizations and analysis results
-    - Saves to configured output path
     """
-    from datetime import datetime
-    
-    # Create timestamp for filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = config["ReportGeneration"]["output_path"]
     
@@ -223,18 +214,40 @@ def generate_report(config):
     base, ext = os.path.splitext(output_path)
     output_path_with_timestamp = f"{base}_{timestamp}{ext}"
     
+    # Get the visualization directory from config
+    viz_dir = config["AnalysisSettings"]["visualization_dir"]
+    
+    # Find the most recent files for each visualization type
+    network_plot = max(glob.glob(os.path.join(viz_dir, "hashtag_network_*.png")), default=None, key=os.path.getctime)
+    sentiment_plot = max(glob.glob(os.path.join(viz_dir, "sentiment_*.png")), default=None, key=os.path.getctime)
+    engagement_plot = max(glob.glob(os.path.join(viz_dir, "engagement_*.png")), default=None, key=os.path.getctime)
+    mutual_followers_plot = max(glob.glob(os.path.join(viz_dir, "mutual_followers_*.png")), default=None, key=os.path.getctime)
+    hashtag_dist_plot = max(glob.glob(os.path.join(viz_dir, "hashtag_dist_*.png")), default=None, key=os.path.getctime)
+    
+    # Convert relative paths to absolute paths
+    if network_plot:
+        network_plot = os.path.abspath(network_plot)
+    if sentiment_plot:
+        sentiment_plot = os.path.abspath(sentiment_plot)
+    if engagement_plot:
+        engagement_plot = os.path.abspath(engagement_plot)
+    if mutual_followers_plot:
+        mutual_followers_plot = os.path.abspath(mutual_followers_plot)
+    if hashtag_dist_plot:
+        hashtag_dist_plot = os.path.abspath(hashtag_dist_plot)
+    
     report = GenerateReport()
-    report.create_report(config["AnalysisSettings"]["output_file"],
-                        config["ReportGeneration"]["path_to_wkhtmltopdf"],
-                        config["AnalysisSettings"]["hashtag_network_static"],
-                        config["AnalysisSettings"]["sentiment_plot"],
-                        config["AnalysisSettings"]["engagement_plot"],
-                        config["AnalysisSettings"]["mutual_followers_plot"],
-                        config["AnalysisSettings"]["hashtag_dist_plot"],
-                        output_path_with_timestamp
-                        )
-    
-    
+    report.create_report(
+        config["AnalysisSettings"]["output_file"],
+        config["ReportGeneration"]["path_to_wkhtmltopdf"],
+        network_plot,
+        sentiment_plot,
+        engagement_plot,
+        mutual_followers_plot,
+        hashtag_dist_plot,
+        output_path_with_timestamp
+    )
+
 async def analyze_data(config):
     """
     Handle the analysis functionality with warning system integration
@@ -285,6 +298,42 @@ async def analyze_data(config):
     else:
         print("No data to process.")
 
+def display_ascii_art(command):
+    """
+    Display ASCII art based on the command being executed
+    
+    Args:
+        command (str): The command being executed
+    """
+    art = {
+        "scrape": """
+    ╔═╗┌─┐┬─┐┌─┐┌─┐┌─┐┬─┐
+    ╚═╗│  ├┬┘├─┤├─┘├┤ ├┬┘
+    ╚═╝└─┘┴└─┴ ┴┴  └─┘┴└─
+        """,
+        "analyze": """
+    ╔═╗┌┐┌┌─┐┬  ┬┌─┐┌─┐
+    ╠═╣│││├─┤│  │┌─┘├┤ 
+    ╩ ╩┘└┘┴ ┴┴─┘┴└─┘└─┘
+        """,
+        "visualize": """
+    ╦  ╦┬┌─┐┬ ┬┌─┐┬  ┬┌─┐┌─┐
+    ╚╗╔╝│└─┐│ │├─┤│  │┌─┘├┤ 
+     ╚╝ ┴└─┘└─┘┴ ┴┴─┘┴└─┘└─┘
+        """,
+        "report": """
+    ╦═╗┌─┐┌─┐┌─┐┬─┐┌┬┐
+    ╠╦╝├┤ ├─┘│ │├┬┘ │ 
+    ╩╚═└─┘┴  └─┘┴└─ ┴ 
+        """,
+        "all": """
+    ╔═╗┬  ┬  ┬
+    ╠═╣│  │  │
+    ╩ ╩┴─┘┴─┘┴─┘
+        """
+    }
+    print("\033[96m" + art.get(command, "") + "\033[0m")  # Cyan color with reset
+
 async def main():
     """
     Main entry point for the application
@@ -315,18 +364,22 @@ async def main():
     
     # Execute requested command
     if args.command == 'scrape' or args.command == 'all':
+        display_ascii_art('scrape')
         print("Starting data scraping...")
         scrape_data(config)
     
     if args.command == 'analyze' or args.command == 'all':
+        display_ascii_art('analyze')
         print("Starting data analysis...")
         await analyze_data(config)
     
     if args.command == 'visualize' or args.command == 'all':
+        display_ascii_art('visualize')
         print("Generating network visualization...")
         visualize_all(config)
         
     if args.command == 'report' or args.command == 'all':
+        display_ascii_art('report')
         print("Generating pdf report...")
         generate_report(config)
 
