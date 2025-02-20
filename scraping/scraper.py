@@ -209,6 +209,15 @@ class ThreadsScraper:
         self.config = ConfigManager()
         self.base_url = base_url
         self.chrome_options = Options()
+        self.chrome_options.add_argument('--no-sandbox')
+        self.chrome_options.add_argument('--headless=new')
+        self.chrome_options.add_argument('--disable-dev-shm-usage')
+        self.chrome_options.add_argument('--disable-gpu')
+        self.chrome_options.add_argument('--disable-software-rasterizer')
+        self.chrome_options.add_argument('--remote-debugging-port=9222')
+        self.chrome_options.add_argument('--disable-setuid-sandbox')
+        self.chrome_options.add_argument('--window-size=1920,1080')
+        self.chrome_options.binary_location = '/usr/bin/google-chrome'
         self.is_logged_in = False
         
         # Get browser options from config
@@ -217,17 +226,14 @@ class ThreadsScraper:
         
         # Enable incognito mode for clean sessions
         self.chrome_options.add_argument('--incognito')
-
-        # Apply browser options from configuration
-        if browser_options.get('headless', False):
-            self.chrome_options.add_argument('--headless=new')
-            
-        # Disable specified features for better performance
-        for feature in browser_options.get('disabled_features', []):
-            self.chrome_options.add_argument(f'--disable-{feature}')
-            
+        
         # Set window size for consistent rendering
         self.chrome_options.add_argument(f'--window-size={window_size["width"]},{window_size["height"]}')
+        
+        # Disable specified features for better performance
+        for feature in browser_options.get('disabled_features', []):
+            if feature not in ['sandbox', 'dev-shm-usage', 'gpu']:  # Skip if already added
+                self.chrome_options.add_argument(f'--disable-{feature}')
         
         # Rotate user agents to avoid detection
         user_agents = self.config.get_user_agents()

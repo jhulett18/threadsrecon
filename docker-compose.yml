@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  threadsrecon:
+    build: .
+    volumes:
+      - ./settings.yaml:/app/settings.yaml:ro
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DISPLAY=:99
+      - UID=${UID:-1000}
+      - GID=${GID:-1000}
+      - MPLCONFIGDIR=/tmp/matplotlib
+    user: root  # Temporarily run as root to ensure permissions
+    security_opt:
+      - seccomp=unconfined
+    cap_add:
+      - SYS_ADMIN
+    shm_size: '2gb'
+    command: all  # Default command, can be overridden

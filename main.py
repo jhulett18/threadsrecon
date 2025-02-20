@@ -173,7 +173,7 @@ def visualize_all(config):
     # Generate and save all visualizations with standardized naming
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # Save all figures
+    # Save all figures in both HTML and PNG formats
     visualizations = {
         'hashtag_network': analyzer.plot_plotly(),
         'sentiment': analyzer.plot_sentiment_trends(combined_df),
@@ -184,18 +184,13 @@ def visualize_all(config):
     
     for name, fig in visualizations.items():
         if fig:
-            if isinstance(fig, plt.Figure):  # Matplotlib figure
-                output_path = os.path.join(viz_dir, f"{name}_{timestamp}.png")
-                fig.savefig(output_path)
-                plt.close(fig)
-            else:  # Plotly figure
-                # Save interactive HTML
-                html_path = os.path.join(viz_dir, f"{name}_{timestamp}.html")
-                fig.write_html(html_path)
-                
-                # Save static PNG
-                png_path = os.path.join(viz_dir, f"{name}_{timestamp}.png")
-                fig.write_image(png_path)
+            # Save PNG for report
+            png_path = os.path.join(viz_dir, f"{name}_{timestamp}.png")
+            fig.write_image(png_path, scale=2)  # Higher resolution for better quality
+            
+            # Save HTML for interactive viewing
+            html_path = os.path.join(viz_dir, f"{name}_{timestamp}.html")
+            fig.write_html(html_path)
     
     # Print strongest connections
     edge_weights = sorted(
@@ -219,13 +214,27 @@ def generate_report(config):
     base, ext = os.path.splitext(output_path)
     output_path_with_timestamp = f"{base}_{timestamp}{ext}"
     
-    # Get the most recent visualization files
+    # Get the visualization directory from config
     viz_dir = config["AnalysisSettings"]["visualization_dir"]
-    network_plot = max(glob.glob(os.path.join(viz_dir, "hashtag_network_*.png")), default=None)
-    sentiment_plot = max(glob.glob(os.path.join(viz_dir, "sentiment_*.html")), default=None)
-    engagement_plot = max(glob.glob(os.path.join(viz_dir, "engagement_*.html")), default=None)
-    mutual_followers_plot = max(glob.glob(os.path.join(viz_dir, "mutual_followers_*.html")), default=None)
-    hashtag_dist_plot = max(glob.glob(os.path.join(viz_dir, "hashtag_dist_*.png")), default=None)
+    
+    # Find the most recent files for each visualization type
+    network_plot = max(glob.glob(os.path.join(viz_dir, "hashtag_network_*.png")), default=None, key=os.path.getctime)
+    sentiment_plot = max(glob.glob(os.path.join(viz_dir, "sentiment_*.png")), default=None, key=os.path.getctime)
+    engagement_plot = max(glob.glob(os.path.join(viz_dir, "engagement_*.png")), default=None, key=os.path.getctime)
+    mutual_followers_plot = max(glob.glob(os.path.join(viz_dir, "mutual_followers_*.png")), default=None, key=os.path.getctime)
+    hashtag_dist_plot = max(glob.glob(os.path.join(viz_dir, "hashtag_dist_*.png")), default=None, key=os.path.getctime)
+    
+    # Convert relative paths to absolute paths
+    if network_plot:
+        network_plot = os.path.abspath(network_plot)
+    if sentiment_plot:
+        sentiment_plot = os.path.abspath(sentiment_plot)
+    if engagement_plot:
+        engagement_plot = os.path.abspath(engagement_plot)
+    if mutual_followers_plot:
+        mutual_followers_plot = os.path.abspath(mutual_followers_plot)
+    if hashtag_dist_plot:
+        hashtag_dist_plot = os.path.abspath(hashtag_dist_plot)
     
     report = GenerateReport()
     report.create_report(
