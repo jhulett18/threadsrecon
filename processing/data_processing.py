@@ -180,6 +180,7 @@ class DataProcessor:
         
     def analyze_hashtag_network(self):
         """Analyze and visualize hashtag network"""
+        print("Processing posts data...")
         # Collect all posts
         all_posts_data = []
         for username, outer_profile in self.data.items():
@@ -196,12 +197,14 @@ class DataProcessor:
         if combined_df.empty:
             return None
             
+        print(f"Analyzing network with {len(combined_df)} posts...")
         analyzer = HashtagNetworkAnalyzer(combined_df)
         
         # Create both visualizations
         static_fig = analyzer.plot_matplotlib()
         interactive_fig = analyzer.plot_plotly()
         
+        print("Generating visualizations...")
         return {
             'static': static_fig,
             'interactive': interactive_fig,

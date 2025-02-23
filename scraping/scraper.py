@@ -190,13 +190,14 @@ class ThreadsScraper:
         config (ConfigManager): Configuration manager instance
     """
     
-    def __init__(self, base_url, chromedriver):
+    def __init__(self, base_url, chromedriver_path, browser_path=None):
         """
         Initialize the ThreadsScraper
         
         Args:
             base_url (str): Base URL for Threads.net
-            chromedriver (str): Path to chromedriver executable
+            chromedriver_path (str): Path to chromedriver executable
+            browser_path (str, optional): Path to Chrome browser executable
             
         Note:
             - Loads configuration from ConfigManager
@@ -217,7 +218,8 @@ class ThreadsScraper:
         self.chrome_options.add_argument('--remote-debugging-port=9222')
         self.chrome_options.add_argument('--disable-setuid-sandbox')
         self.chrome_options.add_argument('--window-size=1920,1080')
-        self.chrome_options.binary_location = '/usr/bin/google-chrome'
+        if browser_path:
+            self.chrome_options.binary_location = browser_path
         self.is_logged_in = False
         
         # Get browser options from config
@@ -242,7 +244,7 @@ class ThreadsScraper:
             
         # Initialize WebDriver with configured timeouts
         timeouts = self.config.get_timeouts()
-        self.driver = webdriver.Chrome(service=Service(chromedriver), options=self.chrome_options)
+        self.driver = webdriver.Chrome(service=Service(chromedriver_path), options=self.chrome_options)
         self.wait = WebDriverWait(self.driver, timeouts['element_wait'])
         
     def login(self, username, password):

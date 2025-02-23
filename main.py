@@ -107,10 +107,10 @@ def scrape_data(config):
     5. Saves results to JSON file
     """
     try:
-        # Extract required configuration
         base_url = config["ScraperSettings"]["base_url"]
         usernames = config["ScraperSettings"]["usernames"]
         chromedriver = config["ScraperSettings"]["chromedriver"]
+        browser_path = config["ScraperSettings"].get("browser_path")
         instagram_username = config["Credentials"].get("instagram_username")
         instagram_password = config["Credentials"].get("instagram_password")
     except KeyError as e:
@@ -118,7 +118,7 @@ def scrape_data(config):
         print(f"Missing configuration key: {missing_key}. Check your settings.yaml file.")
         sys.exit(1)
 
-    scraper = ThreadsScraper(base_url, chromedriver)
+    scraper = ThreadsScraper(base_url, chromedriver, browser_path)
     all_profiles_data = {}
 
     try:
@@ -376,6 +376,7 @@ async def main():
     if args.command == 'visualize' or args.command == 'all':
         display_ascii_art('visualize')
         print("Generating network visualization...")
+        print("This may take a few minutes for large datasets...")
         visualize_all(config)
         
     if args.command == 'report' or args.command == 'all':

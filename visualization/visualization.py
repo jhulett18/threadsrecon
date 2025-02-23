@@ -76,10 +76,13 @@ class HashtagNetworkAnalyzer:
         return G
     
     
-    def plot_plotly(self, min_edge_weight=2, min_node_freq=3):
+    def plot_plotly(self, min_edge_weight=2, min_node_freq=3, max_nodes=100):
+        """Create interactive visualization using plotly with size limits"""
+        # Get top N most frequent hashtags
+        top_hashtags = dict(sorted(self.node_frequencies.items(), 
+                                 key=lambda x: x[1], 
+                                 reverse=True)[:max_nodes])
         """
-        Create interactive visualization using plotly
-        
         Features:
         - Interactive hovering with hashtag frequency information
         - Draggable nodes
@@ -95,7 +98,11 @@ class HashtagNetworkAnalyzer:
         
         Returns: Plotly Figure object or None if no nodes meet criteria
         """
-        G = self.create_network_graph(min_edge_weight, min_node_freq)
+        G = nx.Graph()
+        for (tag1, tag2), weight in self.edge_weights.items():
+            if (tag1 in top_hashtags and tag2 in top_hashtags and 
+                weight >= min_edge_weight):
+                G.add_edge(tag1, tag2, weight=weight)
         
         if len(G) == 0:
             print("No nodes meet the minimum criteria")
