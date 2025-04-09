@@ -106,7 +106,7 @@ class HashtagNetworkAnalyzer:
         
         if len(G) == 0:
             print("No nodes meet the minimum criteria")
-            return
+            return None
         
         # Calculate layout
         pos = nx.spring_layout(G, k=1/np.sqrt(len(G)), iterations=50)

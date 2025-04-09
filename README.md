@@ -251,26 +251,6 @@ Create PDF report.
 python main.py report  
 ```
 
-## Output Structure
-```
-data/
-├── profiles.json           # Raw scraped data
-├── analyzed_profiles.json  # Processed data
-├── archived_profiles.json  # Archived data
-├── visualizations/
-│   ├── hashtag_network.png
-│   ├── hashtag_network.html
-│   ├── sentiment.png
-│   ├── sentiment.html
-│   ├── engagement.png
-│   ├── engagement.html
-│   ├── mutual_followers.png
-│   ├── mutual_followers.html
-│   ├── hashtag_dist.png
-│   └── hashtag_dist.html
-└── reports/
-    └── report_YYYY-MM-DD.pdf
-```
 ## Security Considerations
 - This tool respects threads.net's robots.txt.
 - Data collected should be used in accordance with local privacy laws.
