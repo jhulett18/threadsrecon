@@ -2,6 +2,26 @@
 
 Local graphical interface for the threadsrecon CLI tool. Provides an easy-to-use web interface for non-technical users to run threads.net OSINT analysis without command-line knowledge.
 
+## 🚀 Quick Start
+
+```bash
+# 1. Install system dependencies (Ubuntu example)
+sudo apt install python3-venv chromium-chromedriver wkhtmltopdf
+
+# 2. Setup project
+git clone https://github.com/jhulett18/threadsrecon-gui.git
+cd threadsrecon-gui
+python3 -m venv venv && source venv/bin/activate
+pip install streamlit pyyaml
+
+# 3. Launch GUI
+streamlit run ui_app.py
+# Open http://localhost:8501 in your browser
+```
+
+**📋 See [INSTALLATION.md](INSTALLATION.md) for detailed platform-specific instructions**
+**⚙️ See [CONFIGURATION.md](CONFIGURATION.md) for comprehensive configuration guide**
+
 ## Prerequisites
 
 ### Required Software
@@ -21,8 +41,8 @@ The GUI expects these binaries to be available:
 
 1. **Clone and setup:**
 ```bash
-git clone https://github.com/offseq/threadsrecon.git
-cd threadsrecon
+git clone https://github.com/jhulett18/threadsrecon-gui.git
+cd threadsrecon-gui
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
@@ -133,7 +153,9 @@ Access at `http://localhost:8501`
 
 ## Configuration
 
-The GUI uses the same `settings.yaml` as the CLI tool. Key sections:
+The GUI uses the same `settings.yaml` as the CLI tool. **See [CONFIGURATION.md](CONFIGURATION.md) for complete configuration guide.**
+
+### Essential Configuration Example
 
 ```yaml
 ScraperSettings:

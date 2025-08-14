@@ -1,0 +1,68 @@
+Credentials:  # Optional - if not set, anonymous access will be used
+  instagram_username: ""  # Your Instagram username (optional)
+  instagram_password: ""  # Your Instagram password (optional)
+
+ScraperSettings:
+  base_url: https://www.threads.net
+  chromedriver: /usr/local/bin/chromedriver  # Path to chromedriver
+  usernames:
+    - example_username  # Replace with target usernames
+  timeouts:
+    page_load: 20
+    element_wait: 10
+  retries:
+    max_attempts: 3
+    initial_delay: 1
+  delays:
+    min_wait: 1
+    max_wait: 3
+  user_agents:
+    - 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+    - 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+    - 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+  browser_options:
+    headless: true  # Set to false for debugging
+    window_size:
+      width: 1920
+      height: 1080
+    disabled_features:
+      - gpu
+      - sandbox
+      - dev-shm-usage
+      - extensions
+      - infobars
+      - logging
+      - popup-blocking
+
+AnalysisSettings:
+  input_file: data/profiles.json
+  archive_file: data/archived_profiles.json
+  output_file: data/analyzed_profiles.json
+  visualization_dir: data/visualizations
+  keywords: 
+    - keyword1
+    - keyword2
+  date_range: 
+    start: null  # or "2024-01-01"
+    end: null    # or "2024-12-31"
+
+WarningSystem:
+  token: ""  # Your Telegram bot token (optional)
+  chat_id: ""  # Your Telegram chat ID (optional)
+  priority_keywords:
+    HIGH:
+      - "urgent"
+      - "emergency"
+      - "critical"
+    MEDIUM:
+      - "important"
+      - "attention"
+      - "warning"
+    LOW:
+      - "update"
+      - "info"
+      - "notice"
+
+ReportGeneration:
+  path_to_wkhtmltopdf: /usr/bin/wkhtmltopdf  # Path to wkhtmltopdf
+  output_path: data/reports/report.pdf
