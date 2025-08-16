@@ -16,4 +16,9 @@ chromedriver
 settings.ini
 settings.yaml
 
-out.pdf
+out.pdfvenv/
+__pycache__/
+*.pyc
+threadsrecon.egg-info/
+chromedriver
+*.zip

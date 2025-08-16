@@ -21,20 +21,25 @@ class ConfigManager:
         config (dict): The complete configuration dictionary loaded from YAML
     """
     
-    def __init__(self, config_path: str = 'settings.yaml'):
+    def __init__(self, config_path: str = 'settings.yaml', config_dict: Dict[str, Any] = None):
         """
-        Initialize the ConfigManager with a YAML configuration file
+        Initialize the ConfigManager with a YAML configuration file or pre-loaded config
         
         Args:
             config_path (str): Path to the YAML configuration file
                              Defaults to 'settings.yaml' in the current directory
+            config_dict (Dict[str, Any]): Pre-loaded configuration dictionary
+                                        If provided, config_path is ignored
                              
         Raises:
             FileNotFoundError: If the configuration file doesn't exist
             yaml.YAMLError: If the configuration file is not valid YAML
         """
-        with open(config_path, 'r') as f:
-            self.config = yaml.safe_load(f)
+        if config_dict is not None:
+            self.config = config_dict
+        else:
+            with open(config_path, 'r') as f:
+                self.config = yaml.safe_load(f)
             
     def get_scraper_settings(self) -> Dict[str, Any]:
         """
