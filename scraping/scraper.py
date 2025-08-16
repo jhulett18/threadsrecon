@@ -34,6 +34,9 @@ from urllib3.exceptions import MaxRetryError
 from requests.exceptions import RequestException
 from concurrent.futures import ThreadPoolExecutor
 from config.config_manager import ConfigManager
+import asyncio
+import json as json_module
+from .media_collector import MediaCollector
 
 
 class ThreadsScraperException(Exception):
@@ -242,12 +245,127 @@ class ThreadsScraper:
         if user_agents:
             self.chrome_options.add_argument(f'--user-agent={random.choice(user_agents)}')
             
+        # Initialize media collection
+        self.media_collector = None
+        self.collect_media = False
+        self.cdp_enabled = False
+        
         # Initialize WebDriver with configured timeouts
+        self.init_driver(chromedriver_path)
+        
+    def init_driver(self, chromedriver_path=None):
+        """
+        Initialize or reinitialize the WebDriver
+        
+        Args:
+            chromedriver_path (str, optional): Path to chromedriver. Uses stored path if not provided.
+        """
+        if chromedriver_path is None:
+            chromedriver_path = getattr(self, 'chromedriver_path', None)
+            if chromedriver_path is None:
+                raise ValueError("ChromeDriver path not provided and not stored")
+        
+        # Store for future reinitializations
+        self.chromedriver_path = chromedriver_path
+        
         timeouts = self.config.get_timeouts()
+        if hasattr(self, 'driver') and self.driver:
+            try:
+                self.driver.quit()
+            except:
+                pass
+        
         self.driver = webdriver.Chrome(service=Service(chromedriver_path), options=self.chrome_options)
         self.wait = WebDriverWait(self.driver, timeouts['element_wait'])
         
-    def login(self, username, password):
+    def enable_media_collection(self, collect_images=True, collect_videos=True, 
+                               max_file_size=50*1024*1024, concurrent_downloads=5):
+        """
+        Enable media collection with network monitoring.
+        
+        Args:
+            collect_images (bool): Whether to collect image files
+            collect_videos (bool): Whether to collect video files
+            max_file_size (int): Maximum file size in bytes
+            concurrent_downloads (int): Number of concurrent downloads
+        """
+        self.collect_media = True
+        self.media_collector = MediaCollector(
+            base_output_dir="data",
+            max_file_size=max_file_size,
+            concurrent_downloads=concurrent_downloads,
+            collect_images=collect_images,
+            collect_videos=collect_videos
+        )
+        
+        # Enable CDP for network monitoring
+        self._enable_cdp_monitoring()
+        print("✅ Media collection enabled with network monitoring")
+    
+    def _enable_cdp_monitoring(self):
+        """Enable Chrome DevTools Protocol for network monitoring."""
+        try:
+            # Enable Network domain
+            self.driver.execute_cdp_cmd('Network.enable', {})
+            
+            # Add network request interceptor
+            self.driver.execute_cdp_cmd('Network.setRequestInterception', {
+                'patterns': [{'urlPattern': '*', 'resourceType': 'Image'},
+                           {'urlPattern': '*', 'resourceType': 'Media'}]
+            })
+            
+            self.cdp_enabled = True
+            print("✅ Chrome DevTools Protocol monitoring enabled")
+            
+        except Exception as e:
+            print(f"Warning: Could not enable CDP monitoring: {e}")
+            self.cdp_enabled = False
+    
+    def _capture_network_requests(self):
+        """Capture and process network requests for media URLs."""
+        if not self.cdp_enabled or not self.media_collector:
+            return
+        
+        try:
+            # Get network logs
+            logs = self.driver.get_log('performance')
+            
+            for log in logs:
+                message = json_module.loads(log['message'])
+                
+                # Process network response events
+                if (message.get('method') == 'Network.responseReceived' and 
+                    'response' in message.get('params', {})):
+                    
+                    response = message['params']['response']
+                    url = response.get('url', '')
+                    content_type = response.get('headers', {}).get('Content-Type', '')
+                    
+                    # Add potential media URL
+                    if url and self.media_collector.is_media_url(url, content_type)[0]:
+                        self.media_collector.add_media_url(
+                            url=url,
+                            content_type=content_type,
+                            context="network_monitor"
+                        )
+                        
+        except Exception as e:
+            # Silently continue if CDP fails
+            pass
+    
+    async def download_collected_media(self, username):
+        """Download all collected media for the current user."""
+        if not self.media_collector:
+            return {}
+        
+        return await self.media_collector.download_all_media(username)
+    
+    def reset_media_collection(self):
+        """Reset media collection for a new user."""
+        if self.media_collector:
+            self.media_collector.reset_collection()
+        
+    def login(self, username, password, skip_consent=False):
         """
         Log into Threads using Instagram credentials or handle anonymous access
         
@@ -278,6 +396,10 @@ class ThreadsScraper:
                 - JavaScript click fallback
                 - Screenshot capture on failure
                 """
+                if skip_consent:
+                    print("Skipping cookie consent handling as requested")
+                    return
+                    
                 try:
                     print("Looking for the Accept Cookies button...")
                     accept_cookies_button = self.wait.until(
@@ -286,10 +408,16 @@ class ThreadsScraper:
                     self.driver.execute_script("arguments[0].click();", accept_cookies_button)
                     print("Accepted cookies")
                 except TimeoutException:
+                    if skip_consent:
+                        print("Cookie consent timeout, but skip_consent is enabled - continuing")
+                        return
                     raise ThreadsScraperException(
                         "Timeout while waiting for cookies popup. The page may not have loaded properly."
                     )
                 except Exception as e:
+                    if skip_consent:
+                        print(f"Cookie consent error, but skip_consent is enabled - continuing: {str(e)}")
+                        return
                     print(f"Could not find or click the Accept Cookies button: {str(e)}")
                     self.driver.save_screenshot("accept_cookies_error.png")
 
@@ -672,6 +800,9 @@ class ThreadsScraper:
                 # Original scrolling for other content types
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
+            # Capture network requests for media collection
+            if self.collect_media:
+                self._capture_network_requests()
                 
             time.sleep(2)
 

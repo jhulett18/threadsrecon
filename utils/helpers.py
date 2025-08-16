@@ -152,6 +152,43 @@ def merge_cli_config(config, args):
     if hasattr(args, 'telegram_chat_id') and args.telegram_chat_id:
         merged_config['WarningSystem']['chat_id'] = args.telegram_chat_id
     
+    # Auto-detect authentication mode based on credentials
+    has_username = hasattr(args, 'instagram_username') and args.instagram_username
+    has_password = hasattr(args, 'instagram_password') and args.instagram_password
+    
+    if has_username and has_password:
+        # Authenticated mode: use login with cookie handling
+        merged_config['ScraperSettings']['login_mode'] = 'authenticated'
+        merged_config['ScraperSettings']['no_login'] = False
+        merged_config['ScraperSettings']['skip_consent'] = False
+    else:
+        # Private mode: skip login and cookies (default)
+        merged_config['ScraperSettings']['login_mode'] = 'private'
+        merged_config['ScraperSettings']['no_login'] = True
+        merged_config['ScraperSettings']['skip_consent'] = True
+    
+    # Media collection is always enabled - just handle customization
+    merged_config['ScraperSettings']['collect_media'] = True
+    
+    # Parse media types
+    media_types = getattr(args, 'media_types', ['all'])
+    if 'all' in media_types:
+        collect_images = collect_videos = True
+    else:
+        collect_images = 'images' in media_types
+        collect_videos = 'videos' in media_types
+    
+    merged_config['ScraperSettings']['collect_images'] = collect_images
+    merged_config['ScraperSettings']['collect_videos'] = collect_videos
+    
+    # File size limit (convert MB to bytes)
+    if hasattr(args, 'max_file_size') and args.max_file_size:
+        merged_config['ScraperSettings']['max_file_size'] = args.max_file_size * 1024 * 1024
+    
+    # Concurrent downloads
+    if hasattr(args, 'concurrent_downloads') and args.concurrent_downloads:
+        merged_config['ScraperSettings']['concurrent_downloads'] = args.concurrent_downloads
+    
     return merged_config
 
 def setup_environment(config):

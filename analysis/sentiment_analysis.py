@@ -3,6 +3,8 @@ Sentiment Analysis Module
 
 This module provides functionality for analyzing sentiment in text data from social media posts.
 It includes tools for sentiment scoring, hashtag extraction, and metadata parsing.
+
+Note: NLTK imports are lazy-loaded to avoid delays during basic scraping operations.
 """
 
 import pandas as pd
@@ -10,23 +12,43 @@ from textblob import TextBlob
 from datetime import datetime
 import json
 import re
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-from nltk.sentiment import SentimentIntensityAnalyzer
 from collections import Counter
 
-# Download necessary NLTK resources
-# These are required for text tokenization and sentiment analysis
-nltk.download('punkt')        # Tokenizer data
-nltk.download('punkt_tab')    # Additional tokenizer data
-nltk.download('stopwords')    # Common words to filter out
-nltk.download('vader_lexicon')  # Sentiment analysis lexicon
+# Global variables for lazy-loaded NLTK components
+_nltk_initialized = False
+_sia = None
+_stopwords_english = None
 
-# Initialize the VADER sentiment analyzer
-# VADER (Valence Aware Dictionary and sEntiment Reasoner) is specifically
-# attuned to sentiments expressed in social media
-sia = SentimentIntensityAnalyzer()
+def _ensure_nltk_ready():
+    """
+    Lazy initialization of NLTK components.
+    Only downloads and initializes NLTK when sentiment analysis is actually needed.
+    """
+    global _nltk_initialized, _sia, _stopwords_english
+    
+    if _nltk_initialized:
+        return
+    
+    print("Initializing NLTK for sentiment analysis (one-time setup)...")
+    
+    # Import NLTK modules only when needed
+    import nltk
+    from nltk.tokenize import word_tokenize
+    from nltk.corpus import stopwords
+    from nltk.sentiment import SentimentIntensityAnalyzer
+    
+    # Download necessary NLTK resources
+    nltk.download('punkt', quiet=True)        # Tokenizer data
+    nltk.download('punkt_tab', quiet=True)    # Additional tokenizer data
+    nltk.download('stopwords', quiet=True)    # Common words to filter out
+    nltk.download('vader_lexicon', quiet=True)  # Sentiment analysis lexicon
+    
+    # Initialize the VADER sentiment analyzer
+    _sia = SentimentIntensityAnalyzer()
+    _stopwords_english = set(stopwords.words('english'))
+    _nltk_initialized = True
+    
+    print("NLTK sentiment analysis ready.")
 
 def analyze_sentiment_nltk(text):
     """
@@ -45,8 +67,9 @@ def analyze_sentiment_nltk(text):
     Note:
         Returns zero scores if analysis fails
     """
+    _ensure_nltk_ready()
     try:
-        scores = sia.polarity_scores(text)
+        scores = _sia.polarity_scores(text)
         return scores
     except Exception as e:
         print(f"Error analyzing sentiment with NLTK: {str(e)}")

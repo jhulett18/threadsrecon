@@ -47,11 +47,11 @@ def create_parser():
         description='threadsrecon - OSINT Tool for threads.net',
         epilog='''
 Examples:
-  %(prog)s scrape -u username1 username2     # Scrape specific usernames
-  %(prog)s scrape -u target --headless       # Scrape in headless mode  
-  %(prog)s all -u user --timeout 30          # Full pipeline with custom timeout
-  %(prog)s analyze --keywords "crypto btc"   # Analyze with specific keywords
-  %(prog)s report --output-dir /custom/path  # Generate report in custom directory
+  %(prog)s scrape -u username1 username2              # Private search with media collection
+  %(prog)s scrape -u target --instagram-username user --instagram-password pass  # Authenticated search
+  %(prog)s scrape -u target --media-types images      # Collect only images
+  %(prog)s all -u user --timeout 30                   # Full pipeline with custom timeout
+  %(prog)s analyze --keywords "crypto btc"            # Analyze with specific keywords
         ''',
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -172,6 +172,27 @@ Examples:
         '--telegram-chat-id',
         metavar='CHAT_ID',
         help='Telegram chat ID for notifications'
+    )
+    
+    # Media collection options (always enabled by default)
+    parser.add_argument(
+        '--media-types',
+        nargs='+',
+        choices=['images', 'videos', 'all'],
+        default=['all'],
+        help='Types of media to collect (default: all)'
+    )
+    parser.add_argument(
+        '--max-file-size',
+        type=int,
+        metavar='MB',
+        help='Maximum file size for downloads in MB (default: 50MB)'
+    )
+    parser.add_argument(
+        '--concurrent-downloads',
+        type=int,
+        metavar='COUNT',
+        help='Number of concurrent media downloads (default: 5)'
     )
     
     # Output options
