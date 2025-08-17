@@ -30,13 +30,12 @@ from urllib.parse import urlparse, parse_qs, unquote
 from datetime import datetime
 import time
 import random
+import os
+import requests
 from urllib3.exceptions import MaxRetryError
 from requests.exceptions import RequestException
 from concurrent.futures import ThreadPoolExecutor
 from config.config_manager import ConfigManager
-import asyncio
-import json as json_module
-from .media_collector import MediaCollector
 
 
 class ThreadsScraperException(Exception):
@@ -245,125 +244,10 @@ class ThreadsScraper:
         if user_agents:
             self.chrome_options.add_argument(f'--user-agent={random.choice(user_agents)}')
             
-        # Initialize media collection
-        self.media_collector = None
-        self.collect_media = False
-        self.cdp_enabled = False
-        
         # Initialize WebDriver with configured timeouts
-        self.init_driver(chromedriver_path)
-        
-    def init_driver(self, chromedriver_path=None):
-        """
-        Initialize or reinitialize the WebDriver
-        
-        Args:
-            chromedriver_path (str, optional): Path to chromedriver. Uses stored path if not provided.
-        """
-        if chromedriver_path is None:
-            chromedriver_path = getattr(self, 'chromedriver_path', None)
-            if chromedriver_path is None:
-                raise ValueError("ChromeDriver path not provided and not stored")
-        
-        # Store for future reinitializations
-        self.chromedriver_path = chromedriver_path
-        
         timeouts = self.config.get_timeouts()
-        if hasattr(self, 'driver') and self.driver:
-            try:
-                self.driver.quit()
-            except:
-                pass
-        
         self.driver = webdriver.Chrome(service=Service(chromedriver_path), options=self.chrome_options)
         self.wait = WebDriverWait(self.driver, timeouts['element_wait'])
-        
-    def enable_media_collection(self, collect_images=True, collect_videos=True, 
-                               max_file_size=50*1024*1024, concurrent_downloads=5):
-        """
-        Enable media collection with network monitoring.
-        
-        Args:
-            collect_images (bool): Whether to collect image files
-            collect_videos (bool): Whether to collect video files
-            max_file_size (int): Maximum file size in bytes
-            concurrent_downloads (int): Number of concurrent downloads
-        """
-        self.collect_media = True
-        self.media_collector = MediaCollector(
-            base_output_dir="data",
-            max_file_size=max_file_size,
-            concurrent_downloads=concurrent_downloads,
-            collect_images=collect_images,
-            collect_videos=collect_videos
-        )
-        
-        # Enable CDP for network monitoring
-        self._enable_cdp_monitoring()
-        print("✅ Media collection enabled with network monitoring")
-    
-    def _enable_cdp_monitoring(self):
-        """Enable Chrome DevTools Protocol for network monitoring."""
-        try:
-            # Enable Network domain
-            self.driver.execute_cdp_cmd('Network.enable', {})
-            
-            # Add network request interceptor
-            self.driver.execute_cdp_cmd('Network.setRequestInterception', {
-                'patterns': [{'urlPattern': '*', 'resourceType': 'Image'},
-                           {'urlPattern': '*', 'resourceType': 'Media'}]
-            })
-            
-            self.cdp_enabled = True
-            print("✅ Chrome DevTools Protocol monitoring enabled")
-            
-        except Exception as e:
-            print(f"Warning: Could not enable CDP monitoring: {e}")
-            self.cdp_enabled = False
-    
-    def _capture_network_requests(self):
-        """Capture and process network requests for media URLs."""
-        if not self.cdp_enabled or not self.media_collector:
-            return
-        
-        try:
-            # Get network logs
-            logs = self.driver.get_log('performance')
-            
-            for log in logs:
-                message = json_module.loads(log['message'])
-                
-                # Process network response events
-                if (message.get('method') == 'Network.responseReceived' and 
-                    'response' in message.get('params', {})):
-                    
-                    response = message['params']['response']
-                    url = response.get('url', '')
-                    content_type = response.get('headers', {}).get('Content-Type', '')
-                    
-                    # Add potential media URL
-                    if url and self.media_collector.is_media_url(url, content_type)[0]:
-                        self.media_collector.add_media_url(
-                            url=url,
-                            content_type=content_type,
-                            context="network_monitor"
-                        )
-                        
-        except Exception as e:
-            # Silently continue if CDP fails
-            pass
-    
-    async def download_collected_media(self, username):
-        """Download all collected media for the current user."""
-        if not self.media_collector:
-            return {}
-        
-        return await self.media_collector.download_all_media(username)
-    
-    def reset_media_collection(self):
-        """Reset media collection for a new user."""
-        if self.media_collector:
-            self.media_collector.reset_collection()
         
     def login(self, username, password, skip_consent=False):
         """
@@ -425,29 +309,28 @@ class ThreadsScraper:
             if username is None or password is None:
                 print("Attempting anonymous access...")
                 try:
-                    self.driver.get(self.base_url + "/login/")
+                    # Go directly to main page for anonymous browsing
+                    self.driver.get(self.base_url)
                 except WebDriverException as e:
-                    raise ThreadsScraperException().handle_http_error(self.base_url + "/login/", e)
+                    raise ThreadsScraperException().handle_http_error(self.base_url, e)
 
-                time.sleep(2)  # Allow page to stabilize
+                time.sleep(3)  # Allow page to stabilize
                 handle_cookies()
 
+                # Verify we can access the site anonymously
                 try:
-                    print("Selecting 'Use without a profile'...")
-                    use_without_profile_button = self.wait.until(
-                        EC.element_to_be_clickable((By.XPATH, "//a[@href='/nonconsent/']//span[text()='Use without a profile']"))
-                    )
-                    use_without_profile_button.click()
-                    print("Successfully selected 'Use without a profile'")
+                    # Check if we successfully loaded the main page
+                    self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+                    print("Successfully accessed Threads anonymously")
                     self.is_logged_in = False
                     return True
                 except TimeoutException:
                     raise ThreadsScraperException(
-                        "Timeout while waiting for 'Use without a profile' button. The page may be unavailable."
+                        "Timeout while loading Threads main page. The site may be unavailable."
                     )
                 except Exception as e:
-                    print(f"Failed to select 'Use without a profile': {str(e)}")
-                    self.driver.save_screenshot("use_without_profile_error.png")
+                    print(f"Failed to access Threads anonymously: {str(e)}")
+                    self.driver.save_screenshot("anonymous_access_error.png")
                     return False
 
             # Handle authenticated login
@@ -585,10 +468,14 @@ class ThreadsScraper:
             date_element = post_element.find('time')
             date_posted = date_element.get('datetime') if date_element else ""
 
+            # Extract media URLs from the post
+            media_urls = self.extract_media_urls(post_element)
+
             return {
                 "text": post_cleaned,
                 "date_posted": date_posted,
-                "metadata": post_metadata
+                "metadata": post_metadata,
+                "media_urls": media_urls
             }
         except Exception as e:
             print(f"Error extracting post data: {str(e)}")
@@ -755,6 +642,199 @@ class ThreadsScraper:
                 cleaned_text = cleaned_text.split(keyword, 1)[-1]
 
         return cleaned_text.strip(), metadata.strip()
+    
+    def extract_media_urls(self, element):
+        """
+        Extract image and video URLs from a post element using simple DOM parsing
+        
+        Args:
+            element (bs4.element.Tag): BeautifulSoup element to extract media from
+            
+        Returns:
+            list: List of media URLs found in the element
+        """
+        media_urls = []
+        
+        try:
+            # Find all img tags
+            images = element.find_all('img')
+            for img in images:
+                src = img.get('src')
+                if src and self.is_valid_media_url(src, 'image'):
+                    media_urls.append(src)
+            
+            # Find all video tags and their sources
+            videos = element.find_all('video')
+            for video in videos:
+                src = video.get('src')
+                if src and self.is_valid_media_url(src, 'video'):
+                    media_urls.append(src)
+                
+                # Check for source tags within video
+                sources = video.find_all('source')
+                for source in sources:
+                    src = source.get('src')
+                    if src and self.is_valid_media_url(src, 'video'):
+                        media_urls.append(src)
+            
+            # Look for background images in style attributes
+            elements_with_style = element.find_all(attrs={'style': True})
+            for elem in elements_with_style:
+                style = elem.get('style', '')
+                if 'background-image' in style:
+                    # Extract URL from background-image: url(...)
+                    import re
+                    matches = re.findall(r'background-image:\s*url\(["\']?([^"\']+)["\']?\)', style)
+                    for match in matches:
+                        if self.is_valid_media_url(match, 'image'):
+                            media_urls.append(match)
+                            
+        except Exception as e:
+            print(f"Error extracting media URLs: {e}")
+        
+        return media_urls
+    
+    def is_valid_media_url(self, url, media_type):
+        """
+        Check if a URL is a valid media URL
+        
+        Args:
+            url (str): URL to check
+            media_type (str): 'image' or 'video'
+            
+        Returns:
+            bool: True if valid media URL
+        """
+        if not url or url.startswith('data:') or url.startswith('#'):
+            return False
+        
+        # Common image extensions
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']
+        video_extensions = ['.mp4', '.webm', '.mov', '.avi']
+        
+        url_lower = url.lower()
+        
+        if media_type == 'image':
+            return any(ext in url_lower for ext in image_extensions) or 'image' in url_lower
+        elif media_type == 'video':
+            return any(ext in url_lower for ext in video_extensions) or 'video' in url_lower
+        
+        return False
+    
+    def create_user_media_folder(self, username):
+        """
+        Create folder structure for storing user media
+        
+        Args:
+            username (str): Username to create folders for
+            
+        Returns:
+            tuple: (images_folder, videos_folder)
+        """
+        base_folder = os.path.join("data", username)
+        images_folder = os.path.join(base_folder, "images")
+        videos_folder = os.path.join(base_folder, "videos")
+        
+        # Create directories if they don't exist
+        os.makedirs(images_folder, exist_ok=True)
+        os.makedirs(videos_folder, exist_ok=True)
+        
+        return images_folder, videos_folder
+    
+    def download_media_file(self, url, folder, filename_prefix="media"):
+        """
+        Download a media file using requests
+        
+        Args:
+            url (str): URL to download
+            folder (str): Destination folder
+            filename_prefix (str): Prefix for the filename
+            
+        Returns:
+            str: Path to downloaded file or None if failed
+        """
+        try:
+            # Generate filename from URL
+            parsed_url = urlparse(url)
+            original_filename = os.path.basename(parsed_url.path)
+            
+            # If no filename or extension, generate one
+            if not original_filename or '.' not in original_filename:
+                if 'image' in url.lower() or any(ext in url.lower() for ext in ['.jpg', '.png', '.gif']):
+                    extension = '.jpg'
+                else:
+                    extension = '.mp4'
+                original_filename = f"{filename_prefix}_{hash(url) % 10000}{extension}"
+            
+            file_path = os.path.join(folder, original_filename)
+            
+            # Check if file already exists
+            if os.path.exists(file_path):
+                print(f"📁 File already exists: {original_filename}")
+                return file_path
+            
+            # Download the file
+            print(f"📥 Downloading: {original_filename}")
+            response = requests.get(url, stream=True, timeout=30)
+            response.raise_for_status()
+            
+            with open(file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            
+            print(f"✅ Downloaded: {original_filename}")
+            return file_path
+            
+        except Exception as e:
+            print(f"❌ Failed to download {url}: {e}")
+            return None
+    
+    def collect_and_download_media(self, username, posts_data):
+        """
+        Collect and download all media from posts data
+        
+        Args:
+            username (str): Username for folder organization
+            posts_data (dict): Posts data containing media URLs
+            
+        Returns:
+            dict: Summary of downloaded media
+        """
+        print(f"🎬 Starting media collection for {username}")
+        
+        # Create folders
+        images_folder, videos_folder = self.create_user_media_folder(username)
+        
+        downloaded_images = []
+        downloaded_videos = []
+        
+        for post_key, post_data in posts_data.items():
+            media_urls = post_data.get('media_urls', [])
+            
+            for url in media_urls:
+                if self.is_valid_media_url(url, 'image'):
+                    file_path = self.download_media_file(url, images_folder, f"post_{post_key}_image")
+                    if file_path:
+                        downloaded_images.append(file_path)
+                elif self.is_valid_media_url(url, 'video'):
+                    file_path = self.download_media_file(url, videos_folder, f"post_{post_key}_video")
+                    if file_path:
+                        downloaded_videos.append(file_path)
+        
+        summary = {
+            'images_downloaded': len(downloaded_images),
+            'videos_downloaded': len(downloaded_videos),
+            'images_folder': images_folder,
+            'videos_folder': videos_folder,
+            'image_files': downloaded_images,
+            'video_files': downloaded_videos
+        }
+        
+        print(f"📊 Media collection complete for {username}:")
+        print(f"   Images: {len(downloaded_images)}")
+        print(f"   Videos: {len(downloaded_videos)}")
+        
+        return summary
 
     def scroll_and_collect_content(self, content_type='posts'):
         """Scroll and collect content with progress tracking
@@ -800,9 +880,6 @@ class ThreadsScraper:
                 # Original scrolling for other content types
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
-            # Capture network requests for media collection
-            if self.collect_media:
-                self._capture_network_requests()
                 
             time.sleep(2)
 
@@ -1126,6 +1203,16 @@ class ThreadsScraper:
             reposts = self.scroll_and_collect_content('reposts')
             profile_data["reposts"] = reposts
             profile_data["reposts_count"] = len(reposts)
+            
+            # Collect and download media from all posts
+            all_posts = {}
+            all_posts.update(posts)
+            all_posts.update(replies)
+            all_posts.update(reposts)
+            
+            if all_posts:
+                media_summary = self.collect_and_download_media(username, all_posts)
+                profile_data["media_summary"] = media_summary
             
         except ThreadsScraperException as e:
             print(f"Scraping error: {str(e)}")
