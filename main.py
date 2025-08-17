@@ -17,6 +17,12 @@ import sys
 import asyncio
 import argparse
 
+# Fix encoding for Windows
+if sys.platform.startswith('win'):
+    import codecs
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer)
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer)
+
 # Ensure we're running from the correct directory
 script_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(script_dir)
@@ -206,6 +212,11 @@ Examples:
         action='store_true',
         help='Enable verbose output'
     )
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Enable detailed debug output with full error traces'
+    )
     
     return parser
 
@@ -269,7 +280,7 @@ async def main():
         if not args.quiet:
             display_ascii_art('scrape')
             print("🔍 Starting data scraping...")
-        scrape_data(config)
+        scrape_data(config, debug=args.debug)
     
     if args.command == 'analyze' or args.command == 'all':
         if not args.quiet:

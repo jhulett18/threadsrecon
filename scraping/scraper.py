@@ -14,6 +14,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
@@ -192,7 +193,7 @@ class ThreadsScraper:
         config (ConfigManager): Configuration manager instance
     """
     
-    def __init__(self, base_url, chromedriver_path, browser_path=None):
+    def __init__(self, base_url, chromedriver_path, browser_path=None, debug=False):
         """
         Initialize the ThreadsScraper
         
@@ -200,6 +201,7 @@ class ThreadsScraper:
             base_url (str): Base URL for Threads.net
             chromedriver_path (str): Path to chromedriver executable
             browser_path (str, optional): Path to Chrome browser executable
+            debug (bool): Enable detailed debug output
             
         Note:
             - Loads configuration from ConfigManager
@@ -211,6 +213,7 @@ class ThreadsScraper:
         """
         self.config = ConfigManager()
         self.base_url = base_url
+        self.debug = debug
         self.chrome_options = Options()
         self.chrome_options.add_argument('--no-sandbox')
         self.chrome_options.add_argument('--headless=new')
@@ -246,7 +249,19 @@ class ThreadsScraper:
             
         # Initialize WebDriver with configured timeouts
         timeouts = self.config.get_timeouts()
-        self.driver = webdriver.Chrome(service=Service(chromedriver_path), options=self.chrome_options)
+        
+        # Use automatic ChromeDriver management (Selenium 4 feature)
+        if not chromedriver_path or chromedriver_path.lower() in ['auto', 'automatic', '']:
+            # Let Selenium 4 automatically manage ChromeDriver
+            self.driver = webdriver.Chrome(options=self.chrome_options)
+        else:
+            try:
+                # Try using configured chromedriver path first
+                self.driver = webdriver.Chrome(service=Service(chromedriver_path), options=self.chrome_options)
+            except Exception as e:
+                print(f"ChromeDriver path failed, falling back to automatic management: {e}")
+                # Fall back to automatic management
+                self.driver = webdriver.Chrome(options=self.chrome_options)
         self.wait = WebDriverWait(self.driver, timeouts['element_wait'])
         
     def login(self, username, password, skip_consent=False):
@@ -478,7 +493,11 @@ class ThreadsScraper:
                 "media_urls": media_urls
             }
         except Exception as e:
-            print(f"Error extracting post data: {str(e)}")
+            error_msg = f"Error extracting post data: {str(e)}"
+            print(error_msg)
+            if self.debug:
+                import traceback
+                print(f"   └── Debug: {traceback.format_exc()}")
             return None
 
     def extract_reply_data(self, reply_element):
@@ -533,7 +552,11 @@ class ThreadsScraper:
             }
 
         except Exception as e:
-            print(f"Error extracting reply data: {str(e)}")
+            error_msg = f"Error extracting reply data: {str(e)}"
+            print(error_msg)
+            if self.debug:
+                import traceback
+                print(f"   └── Debug: {traceback.format_exc()}")
             return None
 
     def extract_repost_data(self, repost_element):
@@ -770,11 +793,14 @@ class ThreadsScraper:
             
             # Check if file already exists
             if os.path.exists(file_path):
-                print(f"📁 File already exists: {original_filename}")
-                return file_path
+                return {
+                    'status': 'exists',
+                    'filename': original_filename,
+                    'path': file_path,
+                    'url': url
+                }
             
             # Download the file
-            print(f"📥 Downloading: {original_filename}")
             response = requests.get(url, stream=True, timeout=30)
             response.raise_for_status()
             
@@ -782,12 +808,25 @@ class ThreadsScraper:
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
             
-            print(f"✅ Downloaded: {original_filename}")
-            return file_path
+            return {
+                'status': 'success',
+                'filename': original_filename,
+                'path': file_path,
+                'url': url
+            }
             
         except Exception as e:
-            print(f"❌ Failed to download {url}: {e}")
-            return None
+            error_msg = str(e)
+            if self.debug:
+                import traceback
+                error_msg = f"{error_msg}\n{traceback.format_exc()}"
+                
+            return {
+                'status': 'failed',
+                'filename': original_filename if 'original_filename' in locals() else 'unknown',
+                'error': error_msg,
+                'url': url
+            }
     
     def collect_and_download_media(self, username, posts_data):
         """
@@ -805,34 +844,84 @@ class ThreadsScraper:
         # Create folders
         images_folder, videos_folder = self.create_user_media_folder(username)
         
-        downloaded_images = []
-        downloaded_videos = []
+        # Track download results
+        download_results = {
+            'success': {'images': [], 'videos': []},
+            'exists': {'images': [], 'videos': []},
+            'failed': {'images': [], 'videos': []}
+        }
         
         for post_key, post_data in posts_data.items():
             media_urls = post_data.get('media_urls', [])
             
             for url in media_urls:
                 if self.is_valid_media_url(url, 'image'):
-                    file_path = self.download_media_file(url, images_folder, f"post_{post_key}_image")
-                    if file_path:
-                        downloaded_images.append(file_path)
+                    result = self.download_media_file(url, images_folder, f"post_{post_key}_image")
+                    if isinstance(result, dict):
+                        media_type = 'images'
+                        if result['status'] == 'success':
+                            download_results['success'][media_type].append(result['path'])
+                        elif result['status'] == 'exists':
+                            download_results['exists'][media_type].append(result['path'])
+                        elif result['status'] == 'failed':
+                            download_results['failed'][media_type].append(result)
+                    else:
+                        # Legacy support - if result is a path string
+                        if result:
+                            download_results['success']['images'].append(result)
+                            
                 elif self.is_valid_media_url(url, 'video'):
-                    file_path = self.download_media_file(url, videos_folder, f"post_{post_key}_video")
-                    if file_path:
-                        downloaded_videos.append(file_path)
+                    result = self.download_media_file(url, videos_folder, f"post_{post_key}_video")
+                    if isinstance(result, dict):
+                        media_type = 'videos'
+                        if result['status'] == 'success':
+                            download_results['success'][media_type].append(result['path'])
+                        elif result['status'] == 'exists':
+                            download_results['exists'][media_type].append(result['path'])
+                        elif result['status'] == 'failed':
+                            download_results['failed'][media_type].append(result)
+                    else:
+                        # Legacy support - if result is a path string
+                        if result:
+                            download_results['success']['videos'].append(result)
+        
+        # Calculate totals
+        total_images = len(download_results['success']['images']) + len(download_results['exists']['images'])
+        total_videos = len(download_results['success']['videos']) + len(download_results['exists']['videos'])
+        
+        # Show summary
+        print(f"📊 Media collection complete for {username}:")
+        
+        # Successful downloads
+        success_images = len(download_results['success']['images'])
+        success_videos = len(download_results['success']['videos'])
+        if success_images > 0 or success_videos > 0:
+            print(f"   ✅ Downloads Completed: {success_images} images, {success_videos} videos")
+        
+        # Files that already existed
+        exists_images = len(download_results['exists']['images'])
+        exists_videos = len(download_results['exists']['videos'])
+        if exists_images > 0 or exists_videos > 0:
+            print(f"   📁 Files Already Exist: {exists_images} images, {exists_videos} videos")
+        
+        # Failed downloads
+        failed_images = len(download_results['failed']['images'])
+        failed_videos = len(download_results['failed']['videos'])
+        if failed_images > 0 or failed_videos > 0:
+            print(f"   ❌ Download Failures: {failed_images} images, {failed_videos} videos")
+            if self.debug:
+                for failed in download_results['failed']['images'] + download_results['failed']['videos']:
+                    print(f"      └── {failed['filename']}: {failed['error']}")
         
         summary = {
-            'images_downloaded': len(downloaded_images),
-            'videos_downloaded': len(downloaded_videos),
+            'images_downloaded': total_images,
+            'videos_downloaded': total_videos,
             'images_folder': images_folder,
             'videos_folder': videos_folder,
-            'image_files': downloaded_images,
-            'video_files': downloaded_videos
+            'image_files': download_results['success']['images'] + download_results['exists']['images'],
+            'video_files': download_results['success']['videos'] + download_results['exists']['videos'],
+            'download_stats': download_results
         }
-        
-        print(f"📊 Media collection complete for {username}:")
-        print(f"   Images: {len(downloaded_images)}")
-        print(f"   Videos: {len(downloaded_videos)}")
         
         return summary
 
@@ -850,12 +939,16 @@ class ThreadsScraper:
                 - Follower data
                 - Following data
         """
-        print(f"Starting to collect {content_type}...")
+        print(f"📝 Collecting {content_type}...")
         previous_content_count = 0
         same_count_iterations = 0
         max_same_count = 3
         collected_content = {}
         content_index = 1
+        
+        # Progress tracking
+        last_progress_count = 0
+        progress_threshold = 5  # Only show progress every 5 new items
 
         # Need to optimize somehow
         while True:
@@ -928,7 +1021,13 @@ class ThreadsScraper:
                         content_index += 1
 
             current_content_count = len(elements)
-            print(f"Found {len(collected_content)} {content_type} so far...")
+            
+            # Show progress only when significant progress is made or in debug mode
+            collected_count = len(collected_content)
+            if self.debug or collected_count - last_progress_count >= progress_threshold:
+                if collected_count > 0:
+                    print(f"   📊 Progress: {collected_count} {content_type} collected")
+                    last_progress_count = collected_count
 
             if current_content_count == previous_content_count:
                 same_count_iterations += 1
@@ -939,6 +1038,15 @@ class ThreadsScraper:
 
             previous_content_count = current_content_count
             time.sleep(1)
+
+        # Final summary
+        final_count = len(collected_content)
+        if final_count > 0:
+            print(f"   ✅ Completed: {final_count} {content_type} collected")
+        else:
+            print(f"   ℹ️  No {content_type} found")
+            if self.debug:
+                print(f"      └── This might be due to privacy settings or empty content")
 
         return collected_content
 
@@ -1034,7 +1142,11 @@ class ThreadsScraper:
                             else:
                                 profile_data['instagram'] = instagram_url
                     except Exception as e:
-                        print(f"Instagram link not found: {str(e)}")
+                        error_msg = f"Instagram link not found: {str(e)}"
+                        print(error_msg)
+                        if self.debug:
+                            import traceback
+                            print(f"   └── Debug: {traceback.format_exc()}")
                         profile_data['instagram'] = "Instagram link not found"
                     
                 
@@ -1215,10 +1327,18 @@ class ThreadsScraper:
                 profile_data["media_summary"] = media_summary
             
         except ThreadsScraperException as e:
-            print(f"Scraping error: {str(e)}")
+            error_msg = f"Scraping error: {str(e)}"
+            print(error_msg)
+            if self.debug:
+                import traceback
+                print(f"   └── Debug: {traceback.format_exc()}")
             return {username: {"error": str(e)}}
         except Exception as e:
-            print(f"Unexpected error: {str(e)}")
+            error_msg = f"Unexpected error: {str(e)}"
+            print(error_msg)
+            if self.debug:
+                import traceback
+                print(f"   └── Debug: {traceback.format_exc()}")
             return {username: {"error": f"An unexpected error occurred: {str(e)}"}}
         
         return {username: profile_data}
