@@ -223,6 +223,24 @@ class ThreadsScraper:
         self.chrome_options.add_argument('--remote-debugging-port=9222')
         self.chrome_options.add_argument('--disable-setuid-sandbox')
         self.chrome_options.add_argument('--window-size=1920,1080')
+        
+        # Suppress Chrome debug output unless debug mode is enabled
+        if not debug:
+            self.chrome_options.add_argument('--log-level=3')  # Only fatal errors
+            self.chrome_options.add_argument('--silent')
+            self.chrome_options.add_argument('--disable-logging')
+            self.chrome_options.add_argument('--disable-gpu-logging')
+            self.chrome_options.add_argument('--disable-extensions-http-throttling')
+            self.chrome_options.add_argument('--disable-background-timer-throttling')
+            self.chrome_options.add_argument('--disable-renderer-backgrounding')
+            self.chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+            self.chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
+            self.chrome_options.add_experimental_option('useAutomationExtension', False)
+            
+        # Additional Chrome performance options
+        self.chrome_options.add_argument('--disable-web-security')
+        self.chrome_options.add_argument('--disable-features=TranslateUI')
+        self.chrome_options.add_argument('--disable-iframes-during-redirect')
         if browser_path:
             self.chrome_options.binary_location = browser_path
         self.is_logged_in = False
@@ -250,6 +268,10 @@ class ThreadsScraper:
         # Initialize WebDriver with configured timeouts
         timeouts = self.config.get_timeouts()
         
+        # Show user-friendly connection message
+        if not debug:
+            print("🌐 Connecting to browser...")
+            
         # Use automatic ChromeDriver management (Selenium 4 feature)
         if not chromedriver_path or chromedriver_path.lower() in ['auto', 'automatic', '']:
             # Let Selenium 4 automatically manage ChromeDriver
@@ -259,9 +281,13 @@ class ThreadsScraper:
                 # Try using configured chromedriver path first
                 self.driver = webdriver.Chrome(service=Service(chromedriver_path), options=self.chrome_options)
             except Exception as e:
-                print(f"ChromeDriver path failed, falling back to automatic management: {e}")
+                if debug:
+                    print(f"ChromeDriver path failed, falling back to automatic management: {e}")
                 # Fall back to automatic management
                 self.driver = webdriver.Chrome(options=self.chrome_options)
+        
+        if not debug:
+            print("✅ Browser connected successfully")
         self.wait = WebDriverWait(self.driver, timeouts['element_wait'])
         
     def login(self, username, password, skip_consent=False):
@@ -754,7 +780,7 @@ class ThreadsScraper:
         Returns:
             tuple: (images_folder, videos_folder)
         """
-        base_folder = os.path.join("data", username)
+        base_folder = os.path.join("data", "users", username)
         images_folder = os.path.join(base_folder, "images")
         videos_folder = os.path.join(base_folder, "videos")
         
